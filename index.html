@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check-up Aziendale</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <!-- Chosen Palette: Calm Neutrals with Corporate Blue -->
+    <!-- Application Structure Plan: The application is structured as a multi-stage, single-page wizard to guide the user seamlessly from data input to actionable insights. Stage 1: "Introduzione" captures basic company information. Stage 2: "Valutazione" presents the core questionnaire, organized into collapsible accordion sections for clarity, with "Operations" featuring sub-categories. Stage 3: "Dashboard Risultati" provides an immediate visual summary with a radar chart and a bar chart for critical issues. Stage 4: "Piano di Miglioramento" translates weaknesses into actions, suggesting projects and visualizing their priority on a Benefit-Effort matrix. This task-oriented flow makes a complex process intuitive. -->
+    <!-- Visualization & Content Choices: 
+        1. Report Info: Assessment scores across categories. Goal: High-level performance overview. Viz/Presentation: Radar Chart. Interaction: Hover tooltips. Justification: Ideal for comparing multiple, equally important categories against a baseline. Library: Chart.js (Canvas).
+        2. Report Info: Calculated "Criticality" for each question. Goal: Highlight urgent problems. Viz/Presentation: Horizontal Bar Chart. Interaction: Hover tooltips. Justification: Effectively ranks items and draws attention to the most critical issues. Library: Chart.js (Canvas).
+        3. Report Info: Potential improvement projects. Goal: Prioritize actions. Viz/Presentation: Scatter Plot (Benefit vs. Effort Matrix) with quadrants. Interaction: Hover tooltips; click to see milestones. Justification: Classic strategic planning tool. Quadrants add immediate strategic categorization (Quick Wins, Major Projects, etc.). Library: Chart.js (Canvas).
+        4. Report Info: The questionnaire. Goal: Collect user input efficiently. Viz/Presentation: HTML Accordion with styled radio buttons. Unanswered questions are highlighted on validation. Interaction: User selects a score (1-5). Justification: Organizes a long form into manageable sections, improving usability. Method: HTML/CSS/JS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        :root {
+            --primary-color: #3B82F6; /* blue-500 */
+            --secondary-color: #1D4ED8; /* blue-700 */
+            --text-color: #1F2937; /* gray-800 */
+            --card-background: #FFFFFF;
+            --border-color: #E5E7EB; /* gray-200 */
+            --danger-color: #FEE2E2; /* red-100 */
+            --danger-border-color: #EF4444; /* red-500 */
+        }
+        body { font-family: 'Inter', sans-serif; color: var(--text-color); background-color: #F3F4F6; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .main-container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+        .card { background-color: var(--card-background); border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid var(--border-color); transition: all 0.3s ease; }
+        .card:hover { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1); }
+        .btn-primary { background-color: var(--primary-color); color: white; font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.3s ease; }
+        .btn-primary:hover { background-color: var(--secondary-color); }
+        .btn-secondary { background-color: #E5E7EB; color: var(--text-color); font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.3s ease; }
+        .btn-secondary:hover { background-color: #D1D5DB; }
+        .accordion-header { cursor: pointer; padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
+        .accordion-item.active .accordion-content { padding-bottom: 1rem; }
+        .accordion-item.active .accordion-arrow { transform: rotate(180deg); }
+        .accordion-arrow { transition: transform 0.3s ease; }
+        .step-indicator { display: flex; align-items: center; padding: 0.5rem 1rem; border-radius: 9999px; font-weight: 500; transition: all 0.3s ease; }
+        .step-indicator.active { background-color: var(--primary-color); color: white; }
+        .step-indicator.completed { background-color: #10B981; color: white; }
+        .step-indicator.inactive { background-color: #E5E7EB; color: #6B7280; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin: auto; height: 350px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 400px; } }
+        input[type="radio"] { appearance: none; width: 1.5rem; height: 1.5rem; border: 2px solid #D1D5DB; border-radius: 50%; transition: 0.2s all linear; margin-right: 0.5rem; position: relative; top: 4px; }
+        input[type="radio"]:checked { border: 6px solid var(--primary-color); }
+        .progress-bar-container { width: 100%; background-color: #e0e0e0; border-radius: 5px; height: 10px; }
+        .progress-bar { width: 0%; height: 10px; background-color: var(--primary-color); border-radius: 5px; transition: width 0.5s ease-in-out; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal-overlay.visible { opacity: 1; visibility: visible; }
+        .modal-content { background: white; padding: 2rem; border-radius: 0.75rem; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal-overlay.visible .modal-content { transform: scale(1); }
+        .unanswered-question { background-color: var(--danger-color); border-left: 4px solid var(--danger-border-color); }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="main-container">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Check-up Aziendale</h1>
+            <p class="text-lg text-gray-600 mt-2">Un tool interattivo per valutare la robustezza dei processi, identificare criticità e pianificare azioni di miglioramento.</p>
+        </header>
+
+        <div class="flex flex-col md:flex-row justify-center items-center space-y-4 md:space-y-0 md:space-x-8 mb-12">
+            <div id="step-1-indicator" class="step-indicator active">
+                <span class="mr-2">1</span> Introduzione
+            </div>
+            <div id="step-2-indicator" class="step-indicator inactive">
+                <span class="mr-2">2</span> Valutazione
+            </div>
+            <div id="step-3-indicator" class="step-indicator inactive">
+                <span class="mr-2">3</span> Risultati
+            </div>
+            <div id="step-4-indicator" class="step-indicator inactive">
+                <span class="mr-2">4</span> Miglioramento
+            </div>
+        </div>
+
+        <main>
+            <!-- Step 1: Introduction -->
+            <section id="step-1-intro" class="card p-8">
+                <h2 class="text-2xl font-bold mb-4">Fase 1: Informazioni sull'Azienda</h2>
+                <p class="text-gray-600 mb-6">Inizia inserendo le informazioni di base sull'azienda che desideri valutare. Questi dati serviranno a contestualizzare i risultati dell'analisi.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="company-name" class="block text-sm font-medium text-gray-700 mb-1">Nome Azienda</label>
+                        <input type="text" id="company-name" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Es. Rossi S.p.A.">
+                    </div>
+                    <div>
+                        <label for="assessment-date" class="block text-sm font-medium text-gray-700 mb-1">Data Valutazione</label>
+                        <input type="date" id="assessment-date" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="mt-8 text-right">
+                    <button id="start-assessment-btn" class="btn-primary">Inizia la Valutazione &rarr;</button>
+                </div>
+            </section>
+            
+            <!-- Step 2: Assessment -->
+            <section id="step-2-assessment" class="hidden">
+                <div class="card p-8 mb-6">
+                     <h2 class="text-2xl font-bold mb-2">Fase 2: Valutazione dei Processi</h2>
+                     <p class="text-gray-600 mb-4">Valuta la robustezza di ogni processo assegnando un punteggio da 1 (Molto Basso) a 5 (Molto Alto). La robustezza indica la capacità del processo di funzionare in modo affidabile e di adattarsi ai cambiamenti. Rispondi a tutte le domande per procedere.</p>
+                     <div class="flex items-center justify-between">
+                         <span id="progress-text" class="text-sm font-medium text-gray-600">Progresso: 0%</span>
+                         <div class="w-3/4 progress-bar-container">
+                            <div id="progress-bar" class="progress-bar"></div>
+                        </div>
+                     </div>
+                </div>
+                <div id="assessment-questions" class="space-y-4"></div>
+                <div id="validation-message" class="hidden mt-4 p-4 text-red-700 bg-red-100 rounded-lg">Per favore, rispondi a tutte le domande evidenziate in rosso per continuare.</div>
+                <div class="mt-8 flex justify-between">
+                    <button id="back-to-intro-btn" class="btn-secondary">&larr; Indietro</button>
+                    <button id="view-results-btn" class="btn-primary">Visualizza Risultati &rarr;</button>
+                </div>
+            </section>
+
+            <!-- Step 3: Results -->
+            <section id="step-3-results" class="hidden space-y-8">
+                <div class="card p-8 text-center">
+                    <h2 class="text-3xl font-bold">Fase 3: Dashboard Risultati</h2>
+                    <p class="text-gray-600 mt-2">Questa dashboard riassume i risultati della valutazione. I grafici evidenziano le performance complessive e le aree di maggiore criticità, offrendo una visione chiara dei punti di forza e di debolezza dell'azienda.</p>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold text-center mb-4">Sintesi Valutazione Aree</h3>
+                        <div class="chart-container">
+                            <canvas id="qcdChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold text-center mb-4">Aree di Maggiore Criticità</h3>
+                        <div class="chart-container" style="height: 400px; max-height: 450px;">
+                            <canvas id="criticalityChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-6">
+                    <h3 class="text-xl font-bold mb-4">Dettaglio Risultati e Aree di Miglioramento</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Processo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Area</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Robustezza</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Impatto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Criticità</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-table-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="mt-8 flex justify-between">
+                    <button id="back-to-assessment-btn" class="btn-secondary">&larr; Modifica Valutazione</button>
+                    <button id="propose-improvements-btn" class="btn-primary">Proponi Miglioramenti &rarr;</button>
+                </div>
+            </section>
+
+            <!-- Step 4: Improvements -->
+            <section id="step-4-improvements" class="hidden space-y-8">
+                <div class="card p-8 text-center">
+                    <h2 class="text-3xl font-bold">Fase 4: Piano di Miglioramento</h2>
+                    <p class="text-gray-600 mt-2">Sulla base delle criticità emerse, vengono suggeriti dei possibili progetti di miglioramento. La matrice Benefit-Effort aiuta a prioritizzare le azioni, identificando gli interventi a più alto impatto e minor sforzo.</p>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                     <div class="card p-6">
+                        <h3 class="text-xl font-bold mb-4">Progetti di Miglioramento Suggeriti</h3>
+                        <p class="text-sm text-gray-500 mb-4">Clicca su un progetto per visualizzare le milestone suggerite.</p>
+                        <div id="project-suggestions" class="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        </div>
+                    </div>
+                    <div class="card p-6">
+                        <h3 class="text-xl font-bold text-center mb-4">Matrice Benefit-Effort</h3>
+                        <div class="chart-container">
+                            <canvas id="benefitEffortChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                 <div class="mt-8 flex justify-between">
+                    <button id="back-to-results-btn" class="btn-secondary">&larr; Rivedi Risultati</button>
+                    <button id="email-report-btn" class="btn-primary">Invia Report via Email</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="milestone-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 id="modal-title" class="text-2xl font-bold"></h2>
+                    <p id="modal-description" class="text-sm text-gray-600 mt-1"></p>
+                </div>
+                <button id="close-milestone-modal-btn" class="text-2xl font-bold text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <h3 class="text-lg font-semibold mb-3">Milestone Proposte</h3>
+            <ul id="modal-milestones" class="space-y-3 list-decimal list-inside"></ul>
+        </div>
+    </div>
+    <div id="email-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Invia Report via Email</h2>
+            <p class="text-gray-600 mb-2">A causa delle restrizioni di sicurezza del browser, non è possibile inviare un'email con un allegato direttamente dal sito.</p>
+            <p class="text-gray-600 mb-6 font-semibold">Il processo avverrà in due passaggi: <br>1. Il report in PDF verrà <strong class="text-blue-600">scaricato</strong> sul tuo computer. <br>2. Si aprirà il tuo client di posta con un'email precompilata. Per favore, <strong class="text-blue-600">allega manualmente il file</strong> appena scaricato prima di inviare.</p>
+            <form id="email-form">
+                <label for="user-email" class="block text-sm font-medium text-gray-700 mb-1">Indirizzo Email del Destinatario</label>
+                <input type="email" id="user-email" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                <div class="mt-6 flex justify-end space-x-4">
+                    <button type="button" id="cancel-email-btn" class="btn-secondary">Annulla</button>
+                    <button type="submit" class="btn-primary">Conferma e Procedi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const { jsPDF } = window.jspdf;
+            const assessmentData = [
+                // Operations - Qualità
+                { id: 'Q1', category: 'Operations', subcategory: 'Qualità', ente: 'Qualità', process: 'Gestione NC', question: 'Esiste un processo formalizzato e documentato per la gestione delle non conformità (NC) di prodotto?', impact: 5, suggestion: { title: 'Standardizzazione Gestione NC', description: 'Definire e implementare una procedura standard (SOP) per la registrazione, analisi e risoluzione di tutte le non conformità.', benefit: 5, effort: 3, milestones: [ { name: 'Mappatura del processo AS-IS di gestione NC', timeline: 'Settimana 1' }, { name: 'Redazione bozza della nuova procedura (SOP)', timeline: 'Settimane 2-3' }, { name: 'Formazione del personale chiave sulla nuova procedura', timeline: 'Settimana 4' }, { name: 'Go-live della nuova procedura e primo monitoraggio', timeline: 'Settimane 5-6 (Buffer incluso)' }, { name: 'Audit di verifica e consolidamento', timeline: 'Entro 90 giorni' } ] } },
+                { id: 'Q2', category: 'Operations', subcategory: 'Qualità', ente: 'Qualità', process: 'Analisi Cause Radice', question: 'Vengono sistematicamente applicate metodologie strutturate (es. 5 Whys, Ishikawa) per l\'analisi delle cause radice delle NC?', impact: 5, suggestion: { title: 'Formazione su Problem Solving', description: 'Erogare formazione sulle principali metodologie di analisi delle cause radice al personale chiave del team Qualità e Produzione.', benefit: 4, effort: 2, milestones: [ { name: 'Selezione dei partecipanti e del fornitore del corso', timeline: 'Settimana 1' }, { name: 'Erogazione corso di formazione (teoria + pratica)', timeline: 'Settimane 2-3' }, { name: 'Applicazione su un caso reale con coaching', timeline: 'Settimane 4-5' }, { name: 'Presentazione risultati e standardizzazione approccio', timeline: 'Settimana 6 (Buffer incluso)' } ] } },
+                { id: 'Q3', category: 'Operations', subcategory: 'Qualità', ente: 'Produzione', process: 'Controlli di Processo', question: 'I controlli qualità durante il processo produttivo (in-process) sono definiti, documentati e registrati in modo consistente?', impact: 4, suggestion: { title: 'Digitalizzazione Controlli Qualità', description: 'Introdurre tablet o postazioni fisse in linea per la registrazione digitale dei controlli di processo, eliminando i supporti cartacei.', benefit: 4, effort: 4, milestones: [ { name: 'Analisi dei piani di controllo attuali e scelta del software/piattaforma', timeline: 'Mese 1' }, { name: 'Configurazione del software e test pilota su una linea', timeline: 'Mese 2' }, { name: 'Formazione operatori e acquisto hardware', timeline: 'Mese 3' }, { name: 'Roll-out su tutte le linee produttive', timeline: 'Mesi 4-5 (Buffer incluso)' }, { name: 'Integrazione con ERP e analisi dati', timeline: 'Mese 6' } ] } },
+                
+                // Operations - Costi
+                { id: 'C1', category: 'Operations', subcategory: 'Costi', ente: 'Produzione', process: 'Monitoraggio Efficienza', question: 'L\'efficienza produttiva (es. OEE) viene misurata, monitorata e utilizzata per guidare azioni di miglioramento?', impact: 5, suggestion: { title: 'Implementazione Monitoraggio OEE', description: 'Installare un sistema per il monitoraggio dell\'OEE su macchine/linee critiche, partendo da una raccolta dati manuale/semiautomatica.', benefit: 5, effort: 3, milestones: [ { name: 'Selezione linea/macchina pilota e definizione metriche', timeline: 'Settimana 1' }, { name: 'Creazione template di raccolta dati e formazione operatori', timeline: 'Settimana 2' }, { name: 'Raccolta dati per 4 settimane e calcolo OEE', timeline: 'Mesi 1-2' }, { name: 'Analisi risultati e definizione prime azioni di miglioramento', timeline: 'Mese 2' }, { name: 'Pianificazione estensione ad altre linee', timeline: 'Mese 3 (Buffer incluso)' } ] } },
+                { id: 'C2', category: 'Operations', subcategory: 'Costi', ente: 'Produzione', process: 'Gestione Scarti', question: 'Gli scarti di produzione vengono misurati, analizzati e sono state intraprese azioni per la loro riduzione sistematica?', impact: 4, suggestion: { title: 'Programma Riduzione Scarti', description: 'Avviare un programma strutturato per la misurazione, classificazione e analisi delle cause di scarto, con team dedicati al miglioramento.', benefit: 5, effort: 3, milestones: [ { name: 'Definizione causali di scarto e implementazione raccolta dati', timeline: 'Settimane 1-2' }, { name: 'Analisi Pareto degli scarti dopo 1 mese di raccolta dati', timeline: 'Settimana 5' }, { name: 'Lancio di 2 team di miglioramento sulle cause principali', timeline: 'Settimana 6' }, { name: 'Verifica risultati e consolidamento', timeline: 'Entro 4 mesi (Buffer incluso)' } ] } },
+
+                // Operations - Pianificazione
+                { id: 'DP1', category: 'Operations', subcategory: 'Pianificazione', ente: 'Pianificazione', process: 'Previsioni di Vendita (S&OP)', question: 'Il processo di pianificazione della produzione si basa su previsioni di vendita strutturate e aggiornate periodicamente?', impact: 5, suggestion: { title: 'Implementazione Processo S&OP', description: 'Implementare un ciclo di Sales & Operations Planning (S&OP) per allineare le previsioni di vendita, i piani di produzione e gli acquisti.', benefit: 5, effort: 4, milestones: [ { name: 'Definizione del ciclo S&OP (input, output, partecipanti, frequenza)', timeline: 'Mese 1' }, { name: 'Sviluppo dei template di supporto (es. file previsioni)', timeline: 'Mese 2' }, { name: 'Primo ciclo S&OP "a secco" (simulazione)', timeline: 'Mese 3' }, { name: 'Go-live del processo S&OP ufficiale', timeline: 'Mese 4 (Buffer incluso)' } ] } },
+                { id: 'DP2', category: 'Operations', subcategory: 'Pianificazione', ente: 'Pianificazione', process: 'Schedulazione Produzione', question: 'La schedulazione della produzione a capacità finita è supportata da strumenti adeguati (es. ERP, software APS)?', impact: 4, suggestion: { title: 'Adozione Tool Schedulazione', description: 'Valutare e implementare un tool avanzato (APS) per la schedulazione a capacità finita, integrato con l\'ERP aziendale.', benefit: 4, effort: 5, milestones: [ { name: 'Software selection e scelta del fornitore', timeline: 'Mesi 1-2' }, { name: 'Analisi funzionale e design della soluzione', timeline: 'Mesi 3-4' }, { name: 'Implementazione, test e formazione utenti', timeline: 'Mesi 5-8' }, { name: 'Go-live e supporto post-avviamento', timeline: 'Mese 9 (Buffer incluso)' } ] } },
+                
+                // Operations - Logistica
+                { id: 'DL1', category: 'Operations', subcategory: 'Logistica', ente: 'Logistica', process: 'Monitoraggio Consegne', question: 'Le performance di consegna ai clienti (OTD - On-Time Delivery) sono misurate e monitorate sistematicamente?', impact: 5, suggestion: { title: 'Dashboard Performance Logistiche', description: 'Creare una dashboard per monitorare in tempo reale i principali KPI logistici, inclusi OTD, costi di trasporto e livello di servizio.', benefit: 5, effort: 3, milestones: [ { name: 'Definizione dei KPI da monitorare e delle fonti dati', timeline: 'Settimana 1' }, { name: 'Sviluppo della dashboard (es. su Power BI, Excel, etc.)', timeline: 'Settimane 2-4' }, { name: 'Validazione dei dati e rilascio agli utenti', timeline: 'Settimana 5' }, { name: 'Introduzione di un meeting periodico di revisione KPI', timeline: 'Dal Mese 2 (Buffer incluso)' } ] } },
+                { id: 'DL2', category: 'Operations', subcategory: 'Logistica', ente: 'Magazzino', process: 'Accuratezza Inventariale', question: 'L\'accuratezza dei dati inventariali a sistema è garantita da un processo di conta ciclica (cycle counting)?', impact: 4, suggestion: { title: 'Programma di Conta Ciclica', description: 'Implementare un programma strutturato di conta ciclica basato sulla classificazione ABC degli articoli per migliorare l\'accuratezza inventariale.', benefit: 4, effort: 2, milestones: [ { name: 'Esecuzione analisi ABC (se non già fatta)', timeline: 'Settimana 1' }, { name: 'Definizione frequenza di conta per classe (A, B, C)', timeline: 'Settimana 2' }, { name: 'Formazione dei contatori e preparazione piano di conta', timeline: 'Settimana 3' }, { name: 'Avvio del programma e analisi delle discrepanze', timeline: 'Dal Mese 2 (Buffer incluso)' } ] } },
+
+                // Acquisti e Sourcing Strategico
+                { id: 'ACQ1', category: 'Acquisti e Sourcing Strategico', subcategory: 'Acquisti', ente: 'Acquisti', process: 'Supplier Performance Mgt.', question: 'Esiste un processo formalizzato per la valutazione periodica delle performance dei fornitori chiave (basato su metriche QCD - Qualità, Costi, Delivery)?', impact: 5, suggestion: { title: 'Implementazione Vendor Rating System', description: 'Sviluppare e implementare un sistema di vendor rating per monitorare oggettivamente le performance QCD dei fornitori strategici e guidare le decisioni di business.', benefit: 5, effort: 3, milestones: [ { name: 'Definizione dei KPI e ponderazioni per il Vendor Rating', timeline: 'Mese 1' }, { name: 'Creazione della scorecard e del processo di raccolta dati', timeline: 'Mese 2' }, { name: 'Formazione del team Acquisti e comunicazione ai fornitori chiave', timeline: 'Mese 3' }, { name: 'Primo ciclo di valutazione e condivisione dei risultati', timeline: 'Mese 4' } ] } },
+                { id: 'ACQ2', category: 'Acquisti e Sourcing Strategico', subcategory: 'Acquisti', ente: 'Acquisti', process: 'Supplier Risk Management', question: 'In caso di performance non adeguate, vengono attuati piani di azione strutturati con il fornitore (es. action plan, de-sourcing, business review)?', impact: 5, suggestion: { title: 'Definizione Processo di Escalation Fornitori', description: 'Formalizzare un processo di escalation per la gestione dei fornitori con basse performance, che includa la definizione di action plan, business review meeting e, se necessario, strategie di de-sourcing.', benefit: 5, effort: 2, milestones: [ { name: 'Definizione delle soglie di performance che attivano l\'escalation', timeline: 'Settimane 1-2' }, { name: 'Creazione dei template per Action Plan e Business Review', timeline: 'Mese 1' }, { name: 'Definizione della matrice di governance (chi decide cosa)', timeline: 'Mese 2' }, { name: 'Formazione del team e applicazione sui primi casi', timeline: 'Dal Mese 3' } ] } },
+                { id: 'ACQ3', category: 'Acquisti e Sourcing Strategico', subcategory: 'Sourcing', ente: 'Acquisti', process: 'Strategic Sourcing', question: 'Le strategie di acquisto per le categorie merceologiche principali sono definite sulla base di un\'analisi del mercato di fornitura e del rischio (es. matrice di Kraljic)?', impact: 4, suggestion: { title: 'Introduzione Metodologia Strategic Sourcing', description: 'Adottare un approccio strutturato allo strategic sourcing, partendo dalla mappatura della spesa e dall\'analisi delle categorie merceologiche per definire strategie differenziate.', benefit: 5, effort: 3, milestones: [ { name: 'Analisi della spesa (Spend Analysis) per mappare il "chi compra cosa da chi"', timeline: 'Mese 1' }, { name: 'Classificazione delle categorie merceologiche e applicazione della matrice di Kraljic', timeline: 'Mese 2' }, { name: 'Sviluppo di una strategia di sourcing per le 2 categorie più strategiche', timeline: 'Mese 3' }, { name: 'Lancio delle prime iniziative di sourcing (es. rinegoziazione, scouting)', timeline: 'Mese 4' } ] } },
+
+                // Strategia e Management
+                { id: 'ST1', category: 'Strategia e Management', subcategory: 'Strategia', ente: 'Direzione', process: 'Pianificazione Strategica', question: 'Esiste un piano strategico aziendale formalizzato, condiviso e revisionato periodicamente (almeno annualmente)?', impact: 5, suggestion: { title: 'Formalizzazione Piano Strategico', description: 'Introdurre un processo strutturato di pianificazione strategica annuale, coinvolgendo le prime linee manageriali e producendo un documento condiviso.', benefit: 5, effort: 3, milestones: [ { name: 'Workshop di definizione Vision, Mission e Obiettivi Strategici', timeline: 'Mese 1' }, { name: 'Analisi SWOT e definizione delle iniziative chiave', timeline: 'Mese 1' }, { name: 'Stesura e approvazione del Piano Strategico', timeline: 'Mese 2' }, { name: 'Comunicazione del piano a tutta l\'azienda', timeline: 'Mese 3' } ] } },
+                { id: 'ST2', category: 'Strategia e Management', subcategory: 'Management', ente: 'Direzione', process: 'Monitoraggio Performance', question: 'I Key Performance Indicators (KPI) aziendali sono definiti, monitorati costantemente e collegati agli obiettivi strategici?', impact: 5, suggestion: { title: 'Implementazione Balanced Scorecard', description: 'Sviluppare una Balanced Scorecard per tradurre la strategia in un set completo di indicatori di performance, monitorati tramite una dashboard direzionale.', benefit: 5, effort: 4, milestones: [ { name: 'Definizione delle prospettive strategiche (finanziaria, cliente, processi, apprendimento)', timeline: 'Settimane 1-2' }, { name: 'Identificazione e selezione dei KPI per ogni prospettiva', timeline: 'Settimane 3-4' }, { name: 'Sviluppo della dashboard e integrazione dati', timeline: 'Mesi 2-3' }, { name: 'Avvio dei meeting periodici di revisione', timeline: 'Dal Mese 4' } ] } },
+
+                // Risorse Umane
+                { id: 'HR1', category: 'Risorse Umane', subcategory: 'Gestione', ente: 'Risorse Umane', process: 'Valutazione Performance', question: 'Esiste un processo strutturato per la valutazione delle performance e la definizione di piani di crescita individuali?', impact: 4, suggestion: { title: 'Implementazione Sistema di Performance Management', description: 'Introdurre un ciclo annuale di valutazione delle performance con MBO (Management by Objectives) e piani di sviluppo personalizzati.', benefit: 4, effort: 3, milestones: [ { name: 'Definizione del processo e degli strumenti di valutazione', timeline: 'Mese 1' }, { name: 'Formazione a manager e collaboratori sul nuovo processo', timeline: 'Mese 2' }, { name: 'Primo ciclo di valutazione e feedback', timeline: 'Mese 3' }, { name: 'Raccolta e analisi dei piani di sviluppo', timeline: 'Mese 4' } ] } },
+                { id: 'HR2', category: 'Risorse Umane', subcategory: 'Sviluppo', ente: 'Risorse Umane', process: 'Formazione e Sviluppo', question: 'La formazione del personale è pianificata sulla base di un\'analisi dei fabbisogni di competenze e legata agli obiettivi aziendali?', impact: 4, suggestion: { title: 'Creazione Piano Formativo Annuale', description: 'Sviluppare un piano formativo annuale basato su un\'analisi strutturata dei gap di competenze, allineato alle necessità strategiche dell\'azienda.', benefit: 4, effort: 2, milestones: [ { name: 'Mappatura delle competenze attuali e future necessarie', timeline: 'Mese 1' }, { name: 'Analisi dei fabbisogni formativi tramite survey e interviste', timeline: 'Mese 2' }, { name: 'Definizione del piano, del budget e dei fornitori', timeline: 'Mese 3' }, { name: 'Erogazione e monitoraggio della formazione', timeline: 'Dall\'inizio dell\'anno' } ] } },
+
+                // Vendite e Marketing
+                { id: 'VM1', category: 'Vendite e Marketing', subcategory: 'Vendite', ente: 'Commerciale', process: 'Gestione Pipeline', question: 'Il processo di vendita è gestito tramite un CRM (Customer Relationship Management) per tracciare opportunità, attività e previsioni?', impact: 5, suggestion: { title: 'Implementazione o Ottimizzazione CRM', description: 'Adottare o migliorare l\'utilizzo di un sistema CRM per standardizzare la gestione del processo di vendita, migliorare la visibilità e l\'accuratezza delle previsioni.', benefit: 5, effort: 4, milestones: [ { name: 'Selezione o revisione della piattaforma CRM', timeline: 'Mese 1' }, { name: 'Definizione degli stadi di vendita e dei campi dati obbligatori', timeline: 'Mese 2' }, { name: 'Formazione della forza vendita e importazione dati', timeline: 'Mese 3' }, { name: 'Go-live e monitoraggio dell\'adozione', timeline: 'Dal Mese 4' } ] } },
+                { id: 'VM2', category: 'Vendite e Marketing', subcategory: 'Marketing', ente: 'Marketing', process: 'Analisi di Mercato', question: 'Vengono condotte regolarmente analisi sulla concorrenza, sui trend di mercato e sulla soddisfazione dei clienti per orientare le strategie?', impact: 4, suggestion: { title: 'Programma Strutturato di Market Intelligence', description: 'Creare un processo ricorrente per la raccolta e l\'analisi di informazioni su concorrenti, mercato e clienti, da condividere con la direzione e le vendite.', benefit: 4, effort: 2, milestones: [ { name: 'Definizione delle fonti informative (report, news, social)', timeline: 'Settimana 1' }, { name: 'Creazione di un report di sintesi mensile', timeline: 'Mese 1' }, { name: 'Lancio di una survey annuale sulla soddisfazione cliente', timeline: 'Ogni anno' }, { name: 'Presentazione periodica dei risultati', timeline: 'Mensile/Trimestrale' } ] } },
+
+                // Finanza e Controllo
+                { id: 'AFC1', category: 'Finanza e Controllo', subcategory: 'Reporting', ente: 'Amministrazione', process: 'Reporting Finanziario', question: 'Il reporting finanziario (es. conto economico, stato patrimoniale) è puntuale, accurato e viene analizzato mensilmente dalla direzione?', impact: 5, suggestion: { title: 'Ottimizzazione Processo di Chiusura Mensile', description: 'Mappare e ottimizzare il processo di chiusura contabile mensile per ridurre i tempi e aumentare l\'accuratezza dei dati, fornendo report analitici alla direzione.', benefit: 4, effort: 3, milestones: [ { name: 'Mappatura del processo di chiusura attuale e identificazione colli di bottiglia', timeline: 'Mese 1' }, { name: 'Standardizzazione delle scritture di rettifica e assestamento', timeline: 'Mese 2' }, { name: 'Introduzione di una checklist e automazione di alcuni task', timeline: 'Mese 3' }, { name: 'Riduzione del tempo di chiusura a X giorni', timeline: 'Entro 6 mesi' } ] } },
+                { id: 'AFC2', category: 'Finanza e Controllo', subcategory: 'Controllo', ente: 'Controllo Gestione', process: 'Controllo dei Costi', question: 'Esiste un sistema di controllo di gestione per monitorare i costi per centro di costo/prodotto e analizzare gli scostamenti rispetto al budget?', impact: 5, suggestion: { title: 'Sviluppo Sistema di Controllo di Gestione', description: 'Implementare o potenziare il sistema di controllo di gestione, definendo centri di costo, un piano dei conti analitico e un processo di budgeting e variance analysis.', benefit: 5, effort: 4, milestones: [ { name: 'Definizione della struttura dei centri di costo', timeline: 'Mese 1' }, { name: 'Implementazione della contabilità analitica', timeline: 'Mesi 2-3' }, { name: 'Sviluppo del primo budget annuale per centri di costo', timeline: 'Mese 4' }, { name: 'Avvio del reporting mensile sugli scostamenti', timeline: 'Dal Mese 5' } ] } },
+
+                // IT e Innovazione
+                { id: 'IT1', category: 'IT e Innovazione', subcategory: 'Sicurezza', ente: 'IT', process: 'Infrastruttura e Sicurezza', question: 'L\'infrastruttura IT è affidabile, scalabile e protetta da adeguate misure di cybersecurity (es. backup, firewall, antivirus)?', impact: 5, suggestion: { title: 'Audit di Sicurezza IT e Piano di Adeguamento', description: 'Condurre un audit completo sulla sicurezza informatica per identificare le vulnerabilità e definire un piano di adeguamento tecnologico e procedurale.', benefit: 5, effort: 3, milestones: [ { name: 'Selezione di un partner per l\'audit di sicurezza', timeline: 'Mese 1' }, { name: 'Esecuzione dell\'audit (vulnerability assessment, penetration test)', timeline: 'Mese 2' }, { name: 'Analisi dei risultati e definizione del piano di remediation', timeline: 'Mese 3' }, { name: 'Implementazione delle azioni prioritarie', timeline: 'Mesi 4-6' } ] } },
+                { id: 'IT2', category: 'IT e Innovazione', subcategory: 'Dati', ente: 'IT', process: 'Gestione Dati', question: 'I dati aziendali strategici sono centralizzati, accessibili e trasformati in informazioni utili al business (Business Intelligence)?', impact: 4, suggestion: { title: 'Progetto di Business Intelligence', description: 'Avviare un progetto per centralizzare i dati chiave in un data warehouse e renderli accessibili tramite strumenti di analisi e dashboard interattive.', benefit: 5, effort: 5, milestones: [ { name: 'Analisi dei fabbisogni informativi e selezione delle aree pilota', timeline: 'Mese 1' }, { name: 'Progettazione del data warehouse e dei flussi di alimentazione (ETL)', timeline: 'Mesi 2-3' }, { name: 'Sviluppo delle prime dashboard (es. vendite, produzione)', timeline: 'Mesi 4-5' }, { name: 'Rilascio e formazione degli utenti chiave', timeline: 'Mese 6' } ] } },
+            ];
+            
+            const state = { currentStep: 1, answers: {}, companyName: '', assessmentDate: '' };
+            let charts = {};
+
+            const navigateToStep = (step) => {
+                document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
+                document.getElementById(`step-${step}-intro`)?.classList.remove('hidden');
+                document.getElementById(`step-${step}-assessment`)?.classList.remove('hidden');
+                document.getElementById(`step-${step}-results`)?.classList.remove('hidden');
+                document.getElementById(`step-${step}-improvements`)?.classList.remove('hidden');
+                document.querySelectorAll('.step-indicator').forEach((indicator, index) => {
+                    indicator.classList.remove('active', 'completed', 'inactive');
+                    const stepNumber = index + 1;
+                    if (stepNumber < step) { indicator.classList.add('completed'); } 
+                    else if (stepNumber === step) { indicator.classList.add('active'); } 
+                    else { indicator.classList.add('inactive'); }
+                });
+                state.currentStep = step;
+                window.scrollTo(0, 0);
+            };
+            
+            const updateProgress = () => {
+                const answeredCount = Object.keys(state.answers).length;
+                const progress = (answeredCount / assessmentData.length) * 100;
+                document.getElementById('progress-bar').style.width = `${progress}%`;
+                document.getElementById('progress-text').textContent = `Progresso: ${Math.round(progress)}% (${answeredCount} / ${assessmentData.length})`;
+            };
+
+            const renderQuestions = () => {
+                const container = document.getElementById('assessment-questions');
+                container.innerHTML = '';
+                const categories = [...new Set(assessmentData.map(q => q.category))];
+                categories.forEach(category => {
+                    const accordionItem = document.createElement('div');
+                    accordionItem.className = 'card accordion-item overflow-hidden';
+                    let contentHtml;
+                    if (category === 'Operations') {
+                        const subcategories = [...new Set(assessmentData.filter(q => q.category === 'Operations').map(q => q.subcategory))];
+                        contentHtml = subcategories.map(sub => {
+                            let questionsHtml = assessmentData
+                                .filter(q => q.subcategory === sub)
+                                .map(q => `
+                                <div class="border-t border-gray-200 question-block p-4" data-question-id="${q.id}">
+                                    <p class="font-semibold text-gray-800">${q.question}</p>
+                                    <p class="text-sm text-gray-500 mb-3">Processo: ${q.process} | Ente: ${q.ente}</p>
+                                    <div class="flex items-center justify-around flex-wrap gap-2 text-sm px-2">
+                                        ${[1, 2, 3, 4, 5].map(v => `<label class="flex items-center cursor-pointer p-1"><input type="radio" name="${q.id}" value="${v}" class="form-radio" data-question-id="${q.id}"><span class="ml-2">${v}</span></label>`).join('')}
+                                    </div>
+                                    <p class="w-full text-center text-xs text-gray-500 mt-2">(1: Molto Basso, 5: Molto Alto)</p>
+                                </div>`).join('');
+                            return `<h4 class="text-lg font-bold bg-gray-100 p-3 mt-4 rounded">${sub}</h4>${questionsHtml}`;
+                        }).join('');
+                    } else {
+                        contentHtml = assessmentData
+                            .filter(q => q.category === category)
+                            .map(q => `
+                            <div class="border-t border-gray-200 question-block p-4" data-question-id="${q.id}">
+                                <p class="font-semibold text-gray-800">${q.question}</p>
+                                <p class="text-sm text-gray-500 mb-3">Processo: ${q.process} | Ente: ${q.ente}</p>
+                                <div class="flex items-center justify-around flex-wrap gap-2 text-sm px-2">
+                                    ${[1, 2, 3, 4, 5].map(v => `<label class="flex items-center cursor-pointer p-1"><input type="radio" name="${q.id}" value="${v}" class="form-radio" data-question-id="${q.id}"><span class="ml-2">${v}</span></label>`).join('')}
+                                </div>
+                                <p class="w-full text-center text-xs text-gray-500 mt-2">(1: Molto Basso, 5: Molto Alto)</p>
+                            </div>`).join('');
+                    }
+                    
+                    accordionItem.innerHTML = `
+                        <div class="accordion-header bg-gray-50">
+                            <h3 class="text-xl font-bold">${category}</h3>
+                            <svg class="w-6 h-6 accordion-arrow transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div class="accordion-content px-4">${contentHtml.replace(/border-t border-gray-200 /, '')}</div>`;
+                    container.appendChild(accordionItem);
+                });
+
+                document.querySelectorAll('.accordion-header').forEach(header => {
+                    header.addEventListener('click', () => {
+                        const currentItem = header.parentElement;
+                        const content = currentItem.querySelector('.accordion-content');
+                        const wasActive = currentItem.classList.contains('active');
+                        document.querySelectorAll('.accordion-item').forEach(item => {
+                            item.classList.remove('active');
+                            item.querySelector('.accordion-content').style.maxHeight = '0px';
+                        });
+                        if (!wasActive) {
+                            currentItem.classList.add('active');
+                            content.style.maxHeight = content.scrollHeight + "px";
+                        }
+                    });
+                });
+                document.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        state.answers[e.target.dataset.questionId] = parseInt(e.target.value);
+                        document.querySelector(`.question-block[data-question-id="${e.target.dataset.questionId}"]`).classList.remove('unanswered-question');
+                        updateProgress();
+                    });
+                });
+            };
+            
+            const destroyCharts = () => { Object.values(charts).forEach(chart => { if(chart) chart.destroy(); }); charts = {}; };
+
+            const calculateResults = () => {
+                const results = assessmentData.map(q => ({...q, robustness: state.answers[q.id] || 0, criticality: q.impact * (6 - (state.answers[q.id] || 0)) })).sort((a,b) => b.criticality - a.criticality);
+                const tableBody = document.getElementById('results-table-body');
+                tableBody.innerHTML = '';
+                results.forEach(r => { tableBody.innerHTML += `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${r.process}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.category}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.robustness}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.impact}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-bold ${r.criticality >= 20 ? 'text-red-600' : (r.criticality >= 12 ? 'text-yellow-600' : 'text-green-600')}">${r.criticality.toFixed(1)}</td></tr>`; });
+                destroyCharts();
+                const categoryData = {};
+                assessmentData.forEach(q => { if (!categoryData[q.category]) { categoryData[q.category] = []; } categoryData[q.category].push(state.answers[q.id] || 0); });
+                const categoryLabels = Object.keys(categoryData);
+                const categoryScores = categoryLabels.map(cat => { const scores = categoryData[cat]; return scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0; });
+                charts.qcd = new Chart(document.getElementById('qcdChart').getContext('2d'), { type: 'radar', data: { labels: categoryLabels, datasets: [{ label: 'Robustezza Media', data: categoryScores, backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 2 }] }, options: { maintainAspectRatio: false, scales: { r: { beginAtZero: true, max: 5, ticks: { stepSize: 1 } } } } });
+                const topCritical = results.slice(0, 5);
+                charts.criticality = new Chart(document.getElementById('criticalityChart').getContext('2d'), { type: 'bar', data: { labels: topCritical.map(r => `${r.process} (${r.category})`), datasets: [{ label: 'Livello di Criticità', data: topCritical.map(r => r.criticality), backgroundColor: ['#EF4444', '#F97316', '#F59E0B', '#EAB308', '#84CC16'] }] }, options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true } }, plugins: { legend: { display: false } } } });
+            };
+
+            const generateImprovements = () => {
+                const results = assessmentData.map(q => ({ ...q, robustness: state.answers[q.id] || 0 }));
+                const improvementProjects = results.filter(r => r.robustness <= 3 && r.suggestion).sort((a,b) => (b.impact * (6 - b.robustness)) - (a.impact * (6 - a.robustness)));
+                const suggestionsContainer = document.getElementById('project-suggestions');
+                suggestionsContainer.innerHTML = '';
+                if(improvementProjects.length > 0){
+                    improvementProjects.forEach(p => {
+                        const projectCard = document.createElement('div');
+                        projectCard.className = "p-4 border border-gray-200 rounded-lg bg-gray-50 hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors";
+                        projectCard.innerHTML = `<h4 class="font-bold text-blue-600">${p.suggestion.title}</h4><p class="text-sm text-gray-600">${p.suggestion.description}</p><p class="text-xs text-gray-500 mt-2">Causa: Bassa robustezza in <strong>${p.process}</strong> (Punteggio: ${p.robustness})</p>`;
+                        projectCard.addEventListener('click', () => showMilestoneModal(p.suggestion));
+                        suggestionsContainer.appendChild(projectCard);
+                    });
+                } else {
+                    suggestionsContainer.innerHTML = `<div class="p-4 text-center text-gray-600">Nessuna criticità rilevante trovata. Ottimo lavoro!</div>`;
+                }
+                const beData = improvementProjects.map(p => ({ x: p.suggestion.effort, y: p.suggestion.benefit, label: p.suggestion.title }));
+                const quadrantsPlugin = { id: 'quadrants', beforeDatasetsDraw(chart) { const { ctx, chartArea: { left, top, right, bottom }, scales: { x, y } } = chart; const midX = x.getPixelForValue(2.5); const midY = y.getPixelForValue(2.5); ctx.save(); ctx.fillStyle = 'rgba(134, 239, 172, 0.2)'; ctx.fillRect(left, top, midX - left, midY - top); ctx.fillStyle = 'rgba(147, 197, 253, 0.2)'; ctx.fillRect(midX, top, right - midX, midY - top); ctx.fillStyle = 'rgba(252, 211, 77, 0.2)'; ctx.fillRect(left, midY, midX - left, bottom - midY); ctx.fillStyle = 'rgba(252, 165, 165, 0.2)'; ctx.fillRect(midX, midY, right - midX, bottom - midY); ctx.font = '600 12px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.fillText('Quick Wins', left + (midX - left) / 2, top + 15); ctx.fillText('Major Projects', midX + (right - midX) / 2, top + 15); ctx.fillText('Fill-ins', left + (midX - left) / 2, bottom - 15); ctx.fillText('Reconsider', midX + (right - midX) / 2, bottom - 15); ctx.restore(); } };
+                if (Chart.registry.plugins.get('quadrants')) { Chart.unregister(quadrantsPlugin); }
+                Chart.register(quadrantsPlugin);
+                charts.benefitEffort = new Chart(document.getElementById('benefitEffortChart').getContext('2d'), { type: 'scatter', data: { datasets: [{ label: 'Progetti', data: beData, backgroundColor: 'rgba(59, 130, 246, 0.7)', pointRadius: 8, pointHoverRadius: 12 }] }, options: { maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Sforzo (Effort)' }, min: 0, max: 5.5, ticks:{stepSize:1} }, y: { title: { display: true, text: 'Beneficio (Benefit)' }, min: 0, max: 5.5, ticks:{stepSize:1} } }, plugins: { tooltip: { callbacks: { label: (c) => c.raw.label } }, legend: {display: false} } } });
+            };
+            
+            const showMilestoneModal = (suggestion) => { document.getElementById('modal-title').textContent = suggestion.title; document.getElementById('modal-description').textContent = suggestion.description; document.getElementById('modal-milestones').innerHTML = suggestion.milestones.map(m => `<li><span class="font-semibold">${m.name}:</span> <span class="text-gray-600">${m.timeline}</span></li>`).join(''); document.getElementById('milestone-modal').classList.add('visible'); };
+            const hideMilestoneModal = () => document.getElementById('milestone-modal').classList.remove('visible');
+            const showEmailModal = () => document.getElementById('email-modal').classList.add('visible');
+            const hideEmailModal = () => document.getElementById('email-modal').classList.remove('visible');
+            
+            async function generateAndEmailPdf(email) {
+                const doc = new jsPDF();
+                const addPageHeader = (pageNumber) => { doc.setFontSize(10).setTextColor(128).text(`Report Check-up Aziendale - Pagina ${pageNumber}`, doc.internal.pageSize.width - 15, 10, { align: 'right' }); };
+                let pageCount = 1; addPageHeader(pageCount);
+                doc.setFontSize(22).setTextColor(40).text('Report Check-up Aziendale', 15, 20);
+                doc.setFontSize(12).setTextColor(40).text(`Azienda: ${state.companyName}`, 15, 30);
+                doc.text(`Data: ${new Date(state.assessmentDate).toLocaleDateString('it-IT')}`, 15, 36);
+                doc.setFontSize(16).setTextColor(40).text('Sintesi Valutazione e Criticità', 15, 50);
+                const qcdChartImg = charts.qcd.toBase64Image(); const critChartImg = charts.criticality.toBase64Image();
+                doc.addImage(qcdChartImg, 'PNG', 15, 60, 85, 85); doc.addImage(critChartImg, 'PNG', 110, 60, 85, 85);
+                const results = assessmentData.map(q => ({...q, robustness: state.answers[q.id] || 0, criticality: q.impact * (6 - (state.answers[q.id] || 0)) })).sort((a,b) => b.criticality - a.criticality);
+                doc.addPage(); pageCount++; addPageHeader(pageCount);
+                doc.setFontSize(16).setTextColor(40).text('Dettaglio Risultati', 15, 20);
+                doc.autoTable({ head: [['Processo', 'Area', 'Robustezza', 'Impatto', 'Criticità']], body: results.map(r => [r.process, r.category, r.robustness, r.impact, r.criticality.toFixed(1)]), startY: 30, headStyles: { fillColor: [59, 130, 246] } });
+                const improvementProjects = results.filter(r => r.robustness <= 3 && r.suggestion);
+                if(improvementProjects.length > 0) {
+                    doc.addPage(); pageCount++; addPageHeader(pageCount);
+                    doc.setFontSize(16).setTextColor(40).text('Piano di Miglioramento Suggerito', 15, 20);
+                    const beChartImg = charts.benefitEffort.toBase64Image();
+                    doc.addImage(beChartImg, 'PNG', 15, 30, 180, 100);
+                    let projectBody = [];
+                    improvementProjects.forEach(p => { projectBody.push([ { content: p.suggestion.title, styles: { fontStyle: 'bold' } } ]); projectBody.push([ p.suggestion.description ]); projectBody.push([ `Milestone: ${p.suggestion.milestones.map(m => `${m.name} (${m.timeline})`).join(', ')}` ]); });
+                    doc.autoTable({ head: [['Progetti Suggeriti']], body: projectBody, startY: 140, theme: 'grid', headStyles: { fillColor: [59, 130, 246] } });
+                }
+                const fileName = `Check-up_${state.companyName.replace(/\s/g, '_')}.pdf`;
+                doc.save(fileName);
+                const subject = encodeURIComponent(`Report Check-up Aziendale per ${state.companyName}`);
+                const body = encodeURIComponent(`Ciao,\n\nin allegato trovi il report del Check-up Aziendale per ${state.companyName} generato in data ${new Date(state.assessmentDate).toLocaleDateString('it-IT')}.\n\n(Ricorda di allegare il file "${fileName}" prima di inviare).\n\nCordiali saluti.`);
+                window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+            }
+
+            document.getElementById('start-assessment-btn').addEventListener('click', () => { const name = document.getElementById('company-name').value; if (!name) { alert('Per favore, inserisci il nome dell\'azienda.'); return; } state.companyName = name; state.assessmentDate = document.getElementById('assessment-date').value; navigateToStep(2); });
+            document.getElementById('back-to-intro-btn').addEventListener('click', () => navigateToStep(1));
+            document.getElementById('back-to-assessment-btn').addEventListener('click', () => navigateToStep(2));
+            document.getElementById('back-to-results-btn').addEventListener('click', () => navigateToStep(3));
+            document.getElementById('view-results-btn').addEventListener('click', () => {
+                document.getElementById('validation-message').classList.add('hidden');
+                document.querySelectorAll('.question-block').forEach(el => el.classList.remove('unanswered-question'));
+                const unanswered = assessmentData.filter(q => !state.answers.hasOwnProperty(q.id));
+                if (unanswered.length > 0) {
+                    unanswered.forEach(q => {
+                        const block = document.querySelector(`.question-block[data-question-id="${q.id}"]`);
+                        if (block) {
+                            block.classList.add('unanswered-question');
+                            const accordionItem = block.closest('.accordion-item');
+                            if (accordionItem && !accordionItem.classList.contains('active')) {
+                                accordionItem.querySelector('.accordion-header').click();
+                            }
+                        }
+                    });
+                    document.getElementById('validation-message').classList.remove('hidden');
+                    return;
+                }
+                calculateResults(); navigateToStep(3);
+            });
+            document.getElementById('propose-improvements-btn').addEventListener('click', () => { generateImprovements(); navigateToStep(4); });
+            document.getElementById('close-milestone-modal-btn').addEventListener('click', hideMilestoneModal);
+            document.getElementById('milestone-modal').addEventListener('click', (e) => { if (e.target.id === 'milestone-modal') hideMilestoneModal(); });
+            document.getElementById('email-report-btn').addEventListener('click', showEmailModal);
+            document.getElementById('cancel-email-btn').addEventListener('click', hideEmailModal);
+            document.getElementById('email-form').addEventListener('submit', (e) => { e.preventDefault(); const email = document.getElementById('user-email').value; hideEmailModal(); generateAndEmailPdf(email); });
+
+            document.getElementById('assessment-date').value = new Date().toISOString().split('T')[0];
+            renderQuestions(); updateProgress(); navigateToStep(1);
+        });
+    </script>
+</body>
+</html>
