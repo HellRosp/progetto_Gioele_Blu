@@ -322,6 +322,41 @@
                 }
             };
             
+            const saveDataToGoogleSheet = () => {
+                if (!SCRIPT_URL) {
+                    console.log("Google Apps Script URL is not configured. Skipping data save.");
+                    return;
+                }
+                const results = assessmentData.map(q => {
+                    const robustness = state.answers[q.id];
+                    return { ...q, robustness: robustness === 'skipped' ? 'skipped' : (robustness || 0) };
+                });
+                const improvements = results
+                    .filter(r => typeof r.robustness === 'number' && r.robustness <= 3 && r.suggestion)
+                    .map(p => p.suggestion.title[state.lang]);
+                const dataToSave = {
+                    timestamp: new Date().toISOString(),
+                    companyName: state.companyName,
+                    assessmentDate: state.assessmentDate,
+                    lang: state.lang,
+                    answers: assessmentData.map(q => ({
+                        id: q.id,
+                        category: q.category,
+                        question: q.question[state.lang],
+                        answer: state.answers[q.id] === undefined ? 'Not Answered' : state.answers[q.id]
+                    })),
+                    improvements: improvements
+                };
+                fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(dataToSave)
+                })
+                .then(response => console.log('Data sent to Google Sheet.'))
+                .catch(error => console.error('Error sending data to Google Sheet:', error));
+            };
+
             const navigateToStep = (step) => {
                 document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
                 document.getElementById(`step-${step}-intro`)?.classList.remove('hidden');
@@ -381,8 +416,7 @@
                     const questionsInCategory = assessmentData.filter(q => q.category === category);
                     const subcategories = [...new Set(questionsInCategory.map(q => q.subcategory))].sort();
                     
-                    const categoryKey = category.replace(/\s/g, '_');
-                    const categoryName = translations[state.lang][categoryKey] || category;
+                    const categoryName = category;
 
                     let contentHtml = subcategories.map(sub => {
                         const questionsInSub = questionsInCategory.filter(q => q.subcategory === sub);
@@ -401,9 +435,8 @@
                                 <p class="w-full text-center text-xs text-gray-500 mt-2">${translations[state.lang].scale_label}</p>
                             </div>`).join('');
                         
-                        if (subcategories.length > 1) {
-                            const subKey = sub.replace(/\s/g, '_');
-                            const subName = translations[state.lang][subKey] || sub;
+                        if (subcategories.length > 1 && sub) {
+                            const subName = sub;
                             return `<div class="bg-gray-100 p-3 mt-4 rounded-t-lg flex justify-between items-center"><h4 class="text-lg font-bold">${subName}</h4><button class="btn-skip skip-subcategory-btn" data-category="${category}" data-subcategory="${sub}">${translations[state.lang].skip_subsection}</button></div><div>${questionsHtml}</div>`;
                         }
                         return questionsHtml;
@@ -438,32 +471,16 @@
                     });
                 });
 
-                document.querySelectorAll('.skip-category-btn').forEach(btn => btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const category = e.target.dataset.category;
-                    const idsToSkip = assessmentData.filter(q => q.category === category).map(q => q.id);
-                    handleSkip(idsToSkip, e.target);
-                }));
-
-                document.querySelectorAll('.skip-subcategory-btn').forEach(btn => btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const subcategory = e.target.dataset.subcategory;
-                    const idsToSkip = assessmentData.filter(q => q.subcategory === subcategory).map(q => q.id);
-                    handleSkip(idsToSkip, e.target);
-                }));
-
-                document.querySelectorAll('.skip-question-btn').forEach(btn => btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const qId = e.target.dataset.questionId;
-                    handleSkip([qId], e.target);
-                }));
-
+                document.querySelectorAll('.skip-category-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); const category = e.target.dataset.category; const idsToSkip = assessmentData.filter(q => q.category === category).map(q => q.id); handleSkip(idsToSkip, e.target); }));
+                document.querySelectorAll('.skip-subcategory-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); const subcategory = e.target.dataset.subcategory; const idsToSkip = assessmentData.filter(q => q.subcategory === subcategory).map(q => q.id); handleSkip(idsToSkip, e.target); }));
+                document.querySelectorAll('.skip-question-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); const qId = e.target.dataset.questionId; handleSkip([qId], e.target); }));
                 document.querySelectorAll('input[type="radio"]').forEach(radio => {
                     radio.addEventListener('change', (e) => {
                         state.answers[e.target.dataset.questionId] = parseInt(e.target.value);
                         const questionBlock = document.querySelector(`.question-block[data-question-id="${e.target.dataset.questionId}"]`);
                         questionBlock.classList.remove('unanswered-question', 'skipped-question');
-                        questionBlock.querySelector('.skip-question-btn').disabled = false;
+                        const skipBtn = questionBlock.querySelector('.skip-question-btn');
+                        if(skipBtn) skipBtn.disabled = false;
                         updateProgress();
                     });
                 });
@@ -571,7 +588,14 @@
                 const fileName = `Check-up_${state.companyName.replace(/\s/g, '_')}.pdf`;
                 doc.save(fileName);
             }
-            
+
+            const switchLang = (lang) => {
+                if (state.lang === lang) return;
+                state.lang = lang;
+                document.documentElement.lang = lang;
+                translatePage();
+            };
+
             const translatePage = () => {
                 const lang = state.lang;
                 document.querySelectorAll('[data-translate-key]').forEach(el => {
@@ -582,8 +606,10 @@
                 });
                 document.title = translations[lang].main_title;
                 document.getElementById('company-name').placeholder = lang === 'it' ? 'Es. Rossi S.p.A.' : 'E.g., Smith Inc.';
+
                 document.querySelectorAll('.lang-switch button').forEach(btn => btn.classList.remove('active'));
                 document.getElementById(`lang-${lang}`).classList.add('active');
+                
                 renderQuestions();
                 Object.keys(state.answers).forEach(qId => {
                     const value = state.answers[qId];
@@ -598,21 +624,13 @@
                 updateProgress();
             };
 
-            const switchLang = (lang) => {
-                if (state.lang === lang) return;
-                state.lang = lang;
-                document.documentElement.lang = lang;
-                translatePage();
-            };
-
             // Event Listeners
             document.getElementById('lang-it').addEventListener('click', () => switchLang('it'));
             document.getElementById('lang-en').addEventListener('click', () => switchLang('en'));
-            document.getElementById('start-assessment-btn').addEventListener('click', () => { const name = document.getElementById('company-name').value; if (!name) { alert('Per favore, inserisci il nome dell\'azienda.'); return; } state.companyName = name; state.assessmentDate = document.getElementById('assessment-date').value; navigateToStep(2); });
+            document.getElementById('start-assessment-btn').addEventListener('click', () => { const name = document.getElementById('company-name').value; if (!name) { alert(state.lang === 'it' ? 'Per favore, inserisci il nome dell\'azienda.' : 'Please enter the company name.'); return; } state.companyName = name; state.assessmentDate = document.getElementById('assessment-date').value; navigateToStep(2); });
             document.getElementById('back-to-intro-btn').addEventListener('click', () => navigateToStep(1));
             document.getElementById('back-to-assessment-btn').addEventListener('click', () => navigateToStep(2));
             document.getElementById('back-to-results-btn').addEventListener('click', () => navigateToStep(3));
-            
             document.getElementById('view-results-btn').addEventListener('click', () => {
                 document.getElementById('validation-message').classList.add('hidden');
                 document.querySelectorAll('.question-block').forEach(el => el.classList.remove('unanswered-question'));
@@ -635,7 +653,6 @@
                 calculateResults(); 
                 navigateToStep(3);
             });
-
             document.getElementById('propose-improvements-btn').addEventListener('click', () => { generateImprovements(); navigateToStep(4); });
             document.getElementById('close-milestone-modal-btn').addEventListener('click', hideMilestoneModal);
             document.getElementById('milestone-modal').addEventListener('click', (e) => { if (e.target.id === 'milestone-modal') hideMilestoneModal(); });
@@ -649,4 +666,6 @@
     </script>
 </body>
 </html>
+
+
 
