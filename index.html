@@ -9,12 +9,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <!-- Chosen Palette: Calm Neutrals with Corporate Blue -->
-    <!-- Application Structure Plan: The application is structured as a multi-stage, single-page wizard to guide the user seamlessly from data input to actionable insights. Stage 1: "Introduzione" captures basic company information. Stage 2: "Valutazione" presents the core questionnaire, organized into collapsible accordion sections for clarity, with "Operations" featuring sub-categories and skip buttons for flexibility. A language switcher allows for full IT/EN localization. Stage 3: "Dashboard Risultati" provides an immediate visual summary with a radar chart and a bar chart for critical issues. Stage 4: "Piano di Miglioramento" translates weaknesses into actions, suggesting projects and visualizing their priority on a Benefit-Effort matrix. This task-oriented flow makes a complex process intuitive. -->
+    <!-- Application Structure Plan: The application is structured as a multi-stage, single-page wizard. Stage 2 now triggers a data-saving function on completion, sending the assessment results to a Google Apps Script endpoint. This allows for automated data logging into a Google Sheet for further analysis, fulfilling the user's requirement for an automatic saving process. -->
     <!-- Visualization & Content Choices: 
         1. Report Info: Assessment scores across categories. Goal: High-level performance overview. Viz/Presentation: Radar Chart. Interaction: Hover tooltips. Justification: Ideal for comparing multiple, equally important categories against a baseline. Library: Chart.js (Canvas).
         2. Report Info: Calculated "Criticality" for each question. Goal: Highlight urgent problems. Viz/Presentation: Horizontal Bar Chart. Interaction: Hover tooltips. Justification: Effectively ranks items and draws attention to the most critical issues. Library: Chart.js (Canvas).
-        3. Report Info: Potential improvement projects. Goal: Prioritize actions. Viz/Presentation: Scatter Plot (Benefit vs. Effort Matrix) with quadrants. Interaction: Hover tooltips; click to see milestones. Justification: Classic strategic planning tool. Quadrants add immediate strategic categorization (Quick Wins, Major Projects, etc.). Library: Chart.js (Canvas).
-        4. Report Info: The questionnaire. Goal: Collect user input efficiently. Viz/Presentation: HTML Accordion with styled radio buttons. Unanswered questions are highlighted on validation. Interaction: User selects a score (1-5) or skips non-relevant questions/sections. Justification: Organizes a long form into manageable sections, improving usability. Method: HTML/CSS/JS. -->
+        3. Report Info: Potential improvement projects. Goal: Prioritize actions. Viz/Presentation: Scatter Plot (Benefit vs. Effort Matrix) with quadrants. Interaction: Hover tooltips; click to see milestones. Justification: Classic strategic planning tool. Library: Chart.js (Canvas).
+        4. Report Info: The questionnaire. Goal: Collect user input efficiently and save it. Viz/Presentation: HTML Accordion with styled radio buttons. Interaction: User selects a score (1-5) or skips. On proceeding to results, data is sent via fetch() to a Google Apps Script Web App. Justification: Automates data collection into a centralized Google Sheet. Method: HTML/CSS/JS with fetch API. -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
         :root {
@@ -221,6 +221,9 @@
         document.addEventListener('DOMContentLoaded', () => {
             const { jsPDF } = window.jspdf;
             
+            // !!! IMPORTANT: REPLACE WITH YOUR GOOGLE APPS SCRIPT WEB APP URL !!!
+            const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3KMcOrb-MU5ld92e-YDuWAou-9YKOPSeV6RoJRKgqFCuLXIN1V60Z4wZjfWUpFLe_5g/exec'; // <-- PASTE YOUR URL HERE
+
             const state = { currentStep: 1, answers: {}, companyName: '', assessmentDate: '', lang: 'it' };
             let charts = {};
             
@@ -271,175 +274,54 @@
                 { id: 'IT1', category: 'IT e Sicurezza', subcategory: 'Sicurezza', ente: {it: 'IT', en: 'IT'}, process: {it: 'Infrastruttura e Sicurezza', en: 'Infrastructure & Security'}, question: {it: 'L\'infrastruttura IT è affidabile, scalabile e protetta da adeguate misure di cybersecurity (es. backup, firewall, antivirus)?', en: 'Is the IT infrastructure reliable, scalable, and protected by adequate cybersecurity measures (e.g., backups, firewalls, antivirus)?'}, impact: 5, suggestion: { title: {it: 'Audit di Sicurezza IT e Piano di Adeguamento', en: 'IT Security Audit and Adjustment Plan'}, description: {it: 'Condurre un audit completo sulla sicurezza informatica per identificare le vulnerabilità e definire un piano di adeguamento tecnologico e procedurale.', en: 'Conduct a comprehensive IT security audit to identify vulnerabilities and define a technological and procedural adjustment plan.'}, benefit: 5, effort: 3, milestones: [ { name: {it: 'Selezione di un partner per l\'audit di sicurezza', en: 'Selection of a partner for the security audit'}, timeline: {it: 'Mese 1', en: 'Month 1'} }, { name: {it: 'Esecuzione dell\'audit (vulnerability assessment, penetration test)', en: 'Execution of the audit (vulnerability assessment, penetration test)'}, timeline: {it: 'Mese 2', en: 'Month 2'} } ] } },
                 { id: 'IT2', category: 'IT e Sicurezza', subcategory: 'Dati', ente: {it: 'IT', en: 'IT'}, process: {it: 'Gestione Dati', en: 'Data Management'}, question: {it: 'I dati aziendali strategici sono centralizzati, accessibili e trasformati in informazioni utili al business (Business Intelligence)?', en: 'Are strategic company data centralized, accessible, and transformed into useful business information (Business Intelligence)?'}, impact: 4, suggestion: { title: {it: 'Progetto di Business Intelligence', en: 'Business Intelligence Project'}, description: {it: 'Avviare un progetto per centralizzare i dati chiave in un data warehouse e renderli accessibili tramite strumenti di analisi e dashboard interattive.', en: 'Launch a project to centralize key data in a data warehouse and make it accessible through analysis tools and interactive dashboards.'}, benefit: 5, effort: 5, milestones: [ { name: {it: 'Analisi dei fabbisogni informativi e selezione delle aree pilota', en: 'Analysis of information needs and selection of pilot areas'}, timeline: {it: 'Mese 1', en: 'Month 1'} }, { name: {it: 'Progettazione del data warehouse e dei flussi di alimentazione (ETL)', en: 'Design of the data warehouse and data feed flows (ETL)'}, timeline: {it: 'Mesi 2-3', en: 'Months 2-3'} } ] } },
             ];
-
+            
             const translations = {
                 it: {
-                    main_title: "Check-up Aziendale",
-                    main_subtitle: "Un tool interattivo per valutare la robustezza dei processi, identificare criticità e pianificare azioni di miglioramento.",
-                    step1_name: "Introduzione",
-                    step2_name: "Valutazione",
-                    step3_name: "Risultati",
-                    step4_name: "Miglioramento",
-                    step1_title: "Fase 1: Informazioni sull'Azienda",
-                    step1_description: "Inizia inserendo le informazioni di base sull'azienda che desideri valutare. Questi dati serviranno a contestualizzare i risultati dell'analisi.",
-                    company_name_label: "Nome Azienda",
-                    date_label: "Data Valutazione",
-                    start_btn: "Inizia la Valutazione &rarr;",
-                    step2_title: "Fase 2: Valutazione dei Processi",
-                    step2_description: "Valuta la robustezza di ogni processo assegnando un punteggio da 1 (Molto Basso) a 5 (Molto Alto). Se una sezione o una domanda non è pertinente, puoi usare i pulsanti \"Salta\".",
-                    progress_label: "Progresso",
-                    validation_msg: "Per favore, rispondi a tutte le domande evidenziate in rosso per continuare.",
-                    back_btn: "&larr; Indietro",
-                    view_results_btn: "Visualizza Risultati &rarr;",
-                    step3_title: "Fase 3: Dashboard Risultati",
-                    step3_description: "Questa dashboard riassume i risultati della valutazione. I grafici evidenziano le performance complessive e le aree di maggiore criticità.",
-                    radar_chart_title: "Sintesi Valutazione Aree",
-                    bar_chart_title: "Aree di Maggiore Criticità",
-                    results_table_title: "Dettaglio Risultati e Aree di Miglioramento",
-                    back_to_assessment_btn: "&larr; Modifica Valutazione",
-                    propose_improvements_btn: "Proponi Miglioramenti &rarr;",
-                    step4_title: "Fase 4: Piano di Miglioramento",
-                    step4_description: "Sulla base delle criticità emerse, vengono suggeriti dei possibili progetti di miglioramento. La matrice Benefit-Effort aiuta a prioritizzare le azioni.",
-                    projects_title: "Progetti di Miglioramento Suggeriti",
-                    projects_subtitle: "Clicca su un progetto per visualizzare le milestone suggerite.",
-                    matrix_title: "Matrice Benefit-Effort",
-                    back_to_results_btn: "&larr; Rivedi Risultati",
-                    download_report_btn: "Scarica Report",
-                    milestones_title: "Milestone Proposte",
-                    skip_section: "Salta Sezione",
-                    skip_subsection: "Salta Sotto-sezione",
-                    skip_question: "Salta",
-                    skipped: "Saltato",
-                    scale_label: "(1: Molto Basso, 5: Molto Alto)",
-                    cause_label: "Causa",
-                    score_label: "Punteggio",
-                    low_robustness_in: "Bassa robustezza in",
-                    no_criticality_found: "Nessuna criticità rilevante trovata. Ottimo lavoro!",
-                    pdf_main_title: "Report Check-up Aziendale",
-                    pdf_company: "Azienda",
-                    pdf_date: "Data",
-                    pdf_summary_title: "Sintesi Valutazione e Criticità",
-                    pdf_details_title: "Dettaglio Risultati",
-                    pdf_improvements_title: "Piano di Miglioramento Suggerito",
-                    pdf_projects_title: "Progetti Suggeriti",
-                    pdf_milestone: "Milestone",
-                    table_header_process: "Processo",
-                    table_header_area: "Area",
-                    table_header_robustness: "Robustezza",
-                    table_header_impact: "Impatto",
-                    table_header_criticality: "Criticità",
-                    radar_label: "Robustezza Media",
-                    bar_label: "Livello di Criticità",
-                    matrix_effort: "Sforzo (Effort)",
-                    matrix_benefit: "Beneficio (Benefit)",
-                    quadrant_quick_wins: "Quick Wins",
-                    quadrant_major_projects: "Major Projects",
-                    quadrant_fill_ins: "Fill-ins",
-                    quadrant_reconsider: "Reconsider",
+                    main_title: "Check-up Aziendale", main_subtitle: "Un tool interattivo per valutare la robustezza dei processi, identificare criticità e pianificare azioni di miglioramento.",
+                    step1_name: "Introduzione", step2_name: "Valutazione", step3_name: "Risultati", step4_name: "Miglioramento",
+                    step1_title: "Fase 1: Informazioni sull'Azienda", step1_description: "Inizia inserendo le informazioni di base sull'azienda che desideri valutare. Questi dati serviranno a contestualizzare i risultati dell'analisi.",
+                    company_name_label: "Nome Azienda", date_label: "Data Valutazione", start_btn: "Inizia la Valutazione &rarr;",
+                    step2_title: "Fase 2: Valutazione dei Processi", step2_description: "Valuta la robustezza di ogni processo assegnando un punteggio da 1 (Molto Basso) a 5 (Molto Alto). Se una sezione o una domanda non è pertinente, puoi usare i pulsanti \"Salta\".",
+                    progress_label: "Progresso", validation_msg: "Per favore, rispondi a tutte le domande evidenziate in rosso per continuare.",
+                    back_btn: "&larr; Indietro", view_results_btn: "Visualizza Risultati &rarr;",
+                    step3_title: "Fase 3: Dashboard Risultati", step3_description: "Questa dashboard riassume i risultati della valutazione. I grafici evidenziano le performance complessive e le aree di maggiore criticità.",
+                    radar_chart_title: "Sintesi Valutazione Aree", bar_chart_title: "Aree di Maggiore Criticità", results_table_title: "Dettaglio Risultati e Aree di Miglioramento",
+                    back_to_assessment_btn: "&larr; Modifica Valutazione", propose_improvements_btn: "Proponi Miglioramenti &rarr;",
+                    step4_title: "Fase 4: Piano di Miglioramento", step4_description: "Sulla base delle criticità emerse, vengono suggeriti dei possibili progetti di miglioramento. La matrice Benefit-Effort aiuta a prioritizzare le azioni.",
+                    projects_title: "Progetti di Miglioramento Suggeriti", projects_subtitle: "Clicca su un progetto per visualizzare le milestone suggerite.",
+                    matrix_title: "Matrice Benefit-Effort", back_to_results_btn: "&larr; Rivedi Risultati", download_report_btn: "Scarica Report",
+                    milestones_title: "Milestone Proposte", skip_section: "Salta Sezione", skip_subsection: "Salta Sotto-sezione", skip_question: "Salta", skipped: "Saltato",
+                    scale_label: "(1: Molto Basso, 5: Molto Alto)", cause_label: "Causa", score_label: "Punteggio", low_robustness_in: "Bassa robustezza in", no_criticality_found: "Nessuna criticità rilevante trovata. Ottimo lavoro!",
+                    pdf_main_title: "Report Check-up Aziendale", pdf_company: "Azienda", pdf_date: "Data", pdf_summary_title: "Sintesi Valutazione e Criticità",
+                    pdf_details_title: "Dettaglio Risultati", pdf_improvements_title: "Piano di Miglioramento Suggerito", pdf_projects_title: "Progetti Suggeriti", pdf_milestone: "Milestone",
+                    table_header_process: "Processo", table_header_area: "Area", table_header_robustness: "Robustezza", table_header_impact: "Impatto", table_header_criticality: "Criticità",
+                    radar_label: "Robustezza Media", bar_label: "Livello di Criticità", matrix_effort: "Sforzo (Effort)", matrix_benefit: "Beneficio (Benefit)",
+                    quadrant_quick_wins: "Quick Wins", quadrant_major_projects: "Major Projects", quadrant_fill_ins: "Fill-ins", quadrant_reconsider: "Reconsider",
                 },
                 en: {
-                    main_title: "Business Check-up",
-                    main_subtitle: "An interactive tool to assess process robustness, identify critical issues, and plan improvement actions.",
-                    step1_name: "Introduction",
-                    step2_name: "Assessment",
-                    step3_name: "Results",
-                    step4_name: "Improvement",
-                    step1_title: "Step 1: Company Information",
-                    step1_description: "Start by entering the basic information of the company you want to assess. This data will help contextualize the analysis results.",
-                    company_name_label: "Company Name",
-                    date_label: "Assessment Date",
-                    start_btn: "Start Assessment &rarr;",
-                    step2_title: "Step 2: Process Assessment",
-                    step2_description: "Assess the robustness of each process by assigning a score from 1 (Very Low) to 5 (Very High). If a section or question is not relevant, you can use the \"Skip\" buttons.",
-                    progress_label: "Progress",
-                    validation_msg: "Please answer all questions highlighted in red to continue.",
-                    back_btn: "&larr; Back",
-                    view_results_btn: "View Results &rarr;",
-                    step3_title: "Step 3: Results Dashboard",
-                    step3_description: "This dashboard summarizes the assessment results. The charts highlight overall performance and the most critical areas.",
-                    radar_chart_title: "Area Assessment Summary",
-                    bar_chart_title: "Most Critical Areas",
-                    results_table_title: "Detailed Results and Improvement Areas",
-                    back_to_assessment_btn: "&larr; Edit Assessment",
-                    propose_improvements_btn: "Propose Improvements &rarr;",
-                    step4_title: "Step 4: Improvement Plan",
-                    step4_description: "Based on the identified critical issues, potential improvement projects are suggested. The Benefit-Effort matrix helps prioritize actions.",
-                    projects_title: "Suggested Improvement Projects",
-                    projects_subtitle: "Click on a project to view the suggested milestones.",
-                    matrix_title: "Benefit-Effort Matrix",
-                    back_to_results_btn: "&larr; Review Results",
-                    download_report_btn: "Download Report",
-                    milestones_title: "Proposed Milestones",
-                    skip_section: "Skip Section",
-                    skip_subsection: "Skip Subsection",
-                    skip_question: "Skip",
-                    skipped: "Skipped",
-                    scale_label: "(1: Very Low, 5: Very High)",
-                    cause_label: "Cause",
-                    score_label: "Score",
-                    low_robustness_in: "Low robustness in",
-                    no_criticality_found: "No significant critical issues found. Great job!",
-                    pdf_main_title: "Business Check-up Report",
-                    pdf_company: "Company",
-                    pdf_date: "Date",
-                    pdf_summary_title: "Assessment and Criticality Summary",
-                    pdf_details_title: "Detailed Results",
-                    pdf_improvements_title: "Suggested Improvement Plan",
-                    pdf_projects_title: "Suggested Projects",
-                    pdf_milestone: "Milestones",
-                    table_header_process: "Process",
-                    table_header_area: "Area",
-                    table_header_robustness: "Robustness",
-                    table_header_impact: "Impact",
-                    table_header_criticality: "Criticality",
-                    radar_label: "Average Robustness",
-                    bar_label: "Criticality Level",
-                    matrix_effort: "Effort",
-                    matrix_benefit: "Benefit",
-                    quadrant_quick_wins: "Quick Wins",
-                    quadrant_major_projects: "Major Projects",
-                    quadrant_fill_ins: "Fill-ins",
-                    quadrant_reconsider: "Reconsider",
+                    main_title: "Business Check-up", main_subtitle: "An interactive tool to assess process robustness, identify critical issues, and plan improvement actions.",
+                    step1_name: "Introduction", step2_name: "Assessment", step3_name: "Results", step4_name: "Improvement",
+                    step1_title: "Step 1: Company Information", step1_description: "Start by entering the basic information of the company you want to assess. This data will help contextualize the analysis results.",
+                    company_name_label: "Company Name", date_label: "Assessment Date", start_btn: "Start Assessment &rarr;",
+                    step2_title: "Step 2: Process Assessment", step2_description: "Assess the robustness of each process by assigning a score from 1 (Very Low) to 5 (Very High). If a section or question is not relevant, you can use the \"Skip\" buttons.",
+                    progress_label: "Progress", validation_msg: "Please answer all questions highlighted in red to continue.",
+                    back_btn: "&larr; Back", view_results_btn: "View Results &rarr;",
+                    step3_title: "Step 3: Results Dashboard", step3_description: "This dashboard summarizes the assessment results. The charts highlight overall performance and the most critical areas.",
+                    radar_chart_title: "Area Assessment Summary", bar_chart_title: "Most Critical Areas", results_table_title: "Detailed Results and Improvement Areas",
+                    back_to_assessment_btn: "&larr; Edit Assessment", propose_improvements_btn: "Propose Improvements &rarr;",
+                    step4_title: "Step 4: Improvement Plan", step4_description: "Based on the identified critical issues, potential improvement projects are suggested. The Benefit-Effort matrix helps prioritize actions.",
+                    projects_title: "Suggested Improvement Projects", projects_subtitle: "Click on a project to view the suggested milestones.",
+                    matrix_title: "Benefit-Effort Matrix", back_to_results_btn: "&larr; Review Results", download_report_btn: "Download Report",
+                    milestones_title: "Proposed Milestones", skip_section: "Skip Section", skip_subsection: "Skip Subsection", skip_question: "Skip", skipped: "Skipped",
+                    scale_label: "(1: Very Low, 5: Very High)", cause_label: "Cause", score_label: "Score", low_robustness_in: "Low robustness in", no_criticality_found: "No significant critical issues found. Great job!",
+                    pdf_main_title: "Business Check-up Report", pdf_company: "Company", pdf_date: "Date", pdf_summary_title: "Assessment and Criticality Summary",
+                    pdf_details_title: "Detailed Results", pdf_improvements_title: "Suggested Improvement Plan", pdf_projects_title: "Suggested Projects", pdf_milestone: "Milestones",
+                    table_header_process: "Process", table_header_area: "Area", table_header_robustness: "Robustness", table_header_impact: "Impact", table_header_criticality: "Criticality",
+                    radar_label: "Average Robustness", bar_label: "Criticality Level", matrix_effort: "Effort", matrix_benefit: "Benefit",
+                    quadrant_quick_wins: "Quick Wins", quadrant_major_projects: "Major Projects", quadrant_fill_ins: "Fill-ins", quadrant_reconsider: "Reconsider",
                 }
             };
-
-            const translatePage = () => {
-                const lang = state.lang;
-                document.querySelectorAll('[data-translate-key]').forEach(el => {
-                    const key = el.dataset.translateKey;
-                    if (translations[lang][key]) {
-                        el.innerHTML = translations[lang][key];
-                    }
-                });
-                document.title = translations[lang].main_title;
-                document.getElementById('company-name').placeholder = lang === 'it' ? 'Es. Rossi S.p.A.' : 'E.g., Smith Inc.';
-
-                document.querySelectorAll('.lang-switch button').forEach(btn => btn.classList.remove('active'));
-                document.getElementById(`lang-${lang}`).classList.add('active');
-                
-                renderQuestions();
-                // Restore answers after re-rendering
-                Object.keys(state.answers).forEach(qId => {
-                    const value = state.answers[qId];
-                    if (value === 'skipped') {
-                        const btn = document.querySelector(`.skip-question-btn[data-question-id="${qId}"]`);
-                        if(btn) handleSkip([qId], btn);
-                    } else if (typeof value === 'number') {
-                        const radio = document.querySelector(`input[name="${qId}"][value="${value}"]`);
-                        if (radio) radio.checked = true;
-                    }
-                });
-                updateProgress();
-            };
-
-            const switchLang = (lang) => {
-                if (state.lang === lang) return;
-                state.lang = lang;
-                document.documentElement.lang = lang;
-                translatePage();
-            };
             
-            // Other functions (navigateToStep, updateProgress, handleSkip, destroyCharts, etc.)
             const navigateToStep = (step) => {
                 document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
                 document.getElementById(`step-${step}-intro`)?.classList.remove('hidden');
@@ -539,7 +421,6 @@
                     container.appendChild(accordionItem);
                 });
 
-                // Event Listeners
                 document.querySelectorAll('.accordion-header').forEach(header => {
                     header.addEventListener('click', (e) => {
                         if (e.target.classList.contains('btn-skip')) return;
@@ -690,6 +571,39 @@
                 const fileName = `Check-up_${state.companyName.replace(/\s/g, '_')}.pdf`;
                 doc.save(fileName);
             }
+            
+            const translatePage = () => {
+                const lang = state.lang;
+                document.querySelectorAll('[data-translate-key]').forEach(el => {
+                    const key = el.dataset.translateKey;
+                    if (translations[lang][key]) {
+                        el.innerHTML = translations[lang][key];
+                    }
+                });
+                document.title = translations[lang].main_title;
+                document.getElementById('company-name').placeholder = lang === 'it' ? 'Es. Rossi S.p.A.' : 'E.g., Smith Inc.';
+                document.querySelectorAll('.lang-switch button').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(`lang-${lang}`).classList.add('active');
+                renderQuestions();
+                Object.keys(state.answers).forEach(qId => {
+                    const value = state.answers[qId];
+                    if (value === 'skipped') {
+                        const btn = document.querySelector(`.skip-question-btn[data-question-id="${qId}"]`);
+                        if(btn) handleSkip([qId], btn);
+                    } else if (typeof value === 'number') {
+                        const radio = document.querySelector(`input[name="${qId}"][value="${value}"]`);
+                        if (radio) radio.checked = true;
+                    }
+                });
+                updateProgress();
+            };
+
+            const switchLang = (lang) => {
+                if (state.lang === lang) return;
+                state.lang = lang;
+                document.documentElement.lang = lang;
+                translatePage();
+            };
 
             // Event Listeners
             document.getElementById('lang-it').addEventListener('click', () => switchLang('it'));
@@ -698,6 +612,7 @@
             document.getElementById('back-to-intro-btn').addEventListener('click', () => navigateToStep(1));
             document.getElementById('back-to-assessment-btn').addEventListener('click', () => navigateToStep(2));
             document.getElementById('back-to-results-btn').addEventListener('click', () => navigateToStep(3));
+            
             document.getElementById('view-results-btn').addEventListener('click', () => {
                 document.getElementById('validation-message').classList.add('hidden');
                 document.querySelectorAll('.question-block').forEach(el => el.classList.remove('unanswered-question'));
@@ -716,8 +631,11 @@
                     document.getElementById('validation-message').classList.remove('hidden');
                     return;
                 }
-                calculateResults(); navigateToStep(3);
+                saveDataToGoogleSheet();
+                calculateResults(); 
+                navigateToStep(3);
             });
+
             document.getElementById('propose-improvements-btn').addEventListener('click', () => { generateImprovements(); navigateToStep(4); });
             document.getElementById('close-milestone-modal-btn').addEventListener('click', hideMilestoneModal);
             document.getElementById('milestone-modal').addEventListener('click', (e) => { if (e.target.id === 'milestone-modal') hideMilestoneModal(); });
