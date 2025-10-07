@@ -31,9 +31,9 @@
         .main-container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
         .card { background-color: var(--card-background); border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid var(--border-color); transition: all 0.3s ease; }
         .card:hover { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1); }
-        .btn-primary { background-color: var(--primary-color); color: white; font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.3s ease; }
+        .btn-primary { background-color: var(--primary-color); color: white; font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.3s ease; text-align: center; }
         .btn-primary:hover { background-color: var(--secondary-color); }
-        .btn-secondary { background-color: #E5E7EB; color: var(--text-color); font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.3s ease; }
+        .btn-secondary { background-color: #E5E7EB; color: var(--text-color); font-weight: 600; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.3s ease; text-align: center; }
         .btn-secondary:hover { background-color: #D1D5DB; }
         .accordion-header { cursor: pointer; padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
@@ -194,9 +194,12 @@
                         </div>
                     </div>
                 </div>
-                 <div class="mt-8 flex justify-between">
+                 <div class="mt-8 flex flex-wrap justify-between items-center gap-4">
                     <button id="back-to-results-btn" class="btn-secondary" data-translate-key="back_to_results_btn">&larr; Rivedi Risultati</button>
-                    <button id="download-report-btn" class="btn-primary" data-translate-key="download_report_btn">Scarica Report</button>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <a href="https://www.linkedin.com/in/riccardogobbi/" target="_blank" class="btn-secondary" data-translate-key="contact_btn">Contattami per discutere i risultati</a>
+                        <button id="download-report-btn" class="btn-primary" data-translate-key="download_report_btn">Scarica Report</button>
+                    </div>
                 </div>
             </section>
         </main>
@@ -289,7 +292,7 @@
                     back_to_assessment_btn: "&larr; Modifica Valutazione", propose_improvements_btn: "Proponi Miglioramenti &rarr;",
                     step4_title: "Fase 4: Piano di Miglioramento", step4_description: "Sulla base delle criticità emerse, vengono suggeriti dei possibili progetti di miglioramento. La matrice Benefit-Effort aiuta a prioritizzare le azioni.",
                     projects_title: "Progetti di Miglioramento Suggeriti", projects_subtitle: "Clicca su un progetto per visualizzare le milestone suggerite.",
-                    matrix_title: "Matrice Benefit-Effort", back_to_results_btn: "&larr; Rivedi Risultati", download_report_btn: "Scarica Report",
+                    matrix_title: "Matrice Benefit-Effort", back_to_results_btn: "&larr; Rivedi Risultati", download_report_btn: "Scarica Report", contact_btn: "Contattami per discutere i risultati",
                     milestones_title: "Milestone Proposte", skip_section: "Salta Sezione", skip_subsection: "Salta Sotto-sezione", skip_question: "Salta", skipped: "Saltato",
                     scale_label: "(1: Molto Basso, 5: Molto Alto)", cause_label: "Causa", score_label: "Punteggio", low_robustness_in: "Bassa robustezza in", no_criticality_found: "Nessuna criticità rilevante trovata. Ottimo lavoro!",
                     pdf_main_title: "Report Check-up Aziendale", pdf_company: "Azienda", pdf_date: "Data", pdf_summary_title: "Sintesi Valutazione e Criticità",
@@ -311,7 +314,7 @@
                     back_to_assessment_btn: "&larr; Edit Assessment", propose_improvements_btn: "Propose Improvements &rarr;",
                     step4_title: "Step 4: Improvement Plan", step4_description: "Based on the identified critical issues, potential improvement projects are suggested. The Benefit-Effort matrix helps prioritize actions.",
                     projects_title: "Suggested Improvement Projects", projects_subtitle: "Click on a project to view the suggested milestones.",
-                    matrix_title: "Benefit-Effort Matrix", back_to_results_btn: "&larr; Review Results", download_report_btn: "Download Report",
+                    matrix_title: "Benefit-Effort Matrix", back_to_results_btn: "&larr; Review Results", download_report_btn: "Download Report", contact_btn: "Contact me to discuss the results",
                     milestones_title: "Proposed Milestones", skip_section: "Skip Section", skip_subsection: "Skip Subsection", skip_question: "Skip", skipped: "Skipped",
                     scale_label: "(1: Very Low, 5: Very High)", cause_label: "Cause", score_label: "Score", low_robustness_in: "Low robustness in", no_criticality_found: "No significant critical issues found. Great job!",
                     pdf_main_title: "Business Check-up Report", pdf_company: "Company", pdf_date: "Date", pdf_summary_title: "Assessment and Criticality Summary",
@@ -666,6 +669,4 @@
     </script>
 </body>
 </html>
-
-
 
