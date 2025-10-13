@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,14 +9,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <!-- Chosen Palette: Calm Neutrals with Corporate Blue -->
-    <!-- Application Structure Plan: The application is structured as a multi-stage, single-page wizard. Stage 1 has been expanded to collect detailed company profiling information with validation. Stage 2 now triggers a data-saving function on completion, sending the assessment results with a unique ID to a Google Apps Script endpoint. This allows for automated, relational data logging into a Google Sheet across three separate tabs for further analysis. -->
-    <!-- Visualization & Content Choices: 
-        1. Report Info: Assessment scores across categories. Goal: High-level performance overview. Viz/Presentation: Radar Chart. Interaction: Hover tooltips. Justification: Ideal for comparing multiple, equally important categories against a baseline. Library: Chart.js (Canvas).
-        2. Report Info: Calculated "Criticality" for each question. Goal: Highlight urgent problems. Viz/Presentation: Horizontal Bar Chart. Interaction: Hover tooltips. Justification: Effectively ranks items and draws attention to the most critical issues. Library: Chart.js (Canvas).
-        3. Report Info: Potential improvement projects. Goal: Prioritize actions. Viz/Presentation: Scatter Plot (Benefit vs. Effort Matrix) with quadrants. Interaction: Hover tooltips; click to see milestones. Justification: Classic strategic planning tool. Library: Chart.js (Canvas).
-        4. Report Info: The questionnaire. Goal: Collect user input efficiently and save it. Viz/Presentation: HTML Accordion with styled radio buttons. Interaction: User selects a score (1-5) or skips. On proceeding to results, data is sent via fetch() to a Google Apps Script Web App. Justification: Automates data collection into a centralized Google Sheet. Method: HTML/CSS/JS with fetch API. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
         :root {
             --primary-color: #3B82F6; /* blue-500 */
@@ -59,7 +52,7 @@
         .skipped-question { background-color: #f3f4f6; opacity: 0.7; }
         .btn-skip { background-color: #f3f4f6; color: #6b7280; font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 9999px; border: 1px solid #d1d5db; transition: all 0.2s ease; }
         .btn-skip:hover { background-color: #e5e7eb; }
-        .btn-skip:disabled { background-color: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+        .btn-skip[data-skipped="true"] { background-color: #D1D5DB; color: #4B5563;}
         .lang-switch { background-color: #e5e7eb; border-radius: 9999px; padding: 4px; display: inline-flex; }
         .lang-switch button { padding: 4px 12px; border-radius: 9999px; font-weight: 600; font-size: 0.875rem; color: #6b7280; border: none; background-color: transparent; cursor: pointer; transition: all 0.2s ease; }
         .lang-switch button.active { background-color: white; color: var(--primary-color); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -448,17 +441,53 @@
             };
             
             const updateProgress = () => {
-                const answeredCount = Object.keys(state.answers).length;
-                const progress = (answeredCount / assessmentData.length) * 100;
+                const totalQuestions = assessmentData.length;
+                const answeredCount = Object.values(state.answers).filter(a => a !== undefined).length;
+                const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
+
                 document.getElementById('progress-bar').style.width = `${progress}%`;
-                document.getElementById('progress-text').textContent = `${translations[state.lang].progress_label}: ${Math.round(progress)}% (${answeredCount} / ${assessmentData.length})`;
+                document.getElementById('progress-text').textContent = `${translations[state.lang].progress_label}: ${Math.round(progress)}% (${answeredCount} / ${totalQuestions})`;
             };
 
-            const handleSkip = (idsToSkip, elementToUpdate) => {
+            const unskipItems = (idsToUnskip, elementToUpdate) => {
+                idsToUnskip.forEach(id => {
+                    delete state.answers[id];
+                    const questionBlock = document.querySelector(`.question-block[data-question-id="${id}"]`);
+                    if (questionBlock) {
+                        questionBlock.classList.remove('skipped-question');
+                        questionBlock.querySelectorAll('input[type="radio"]').forEach(radio => {
+                            radio.disabled = false;
+                        });
+                        const skipBtn = questionBlock.querySelector('.skip-question-btn');
+                        if (skipBtn) {
+                            skipBtn.textContent = translations[state.lang].skip_question;
+                        }
+                    }
+                });
+                if (elementToUpdate) {
+                    if (elementToUpdate.classList.contains('skip-category-btn')) {
+                        elementToUpdate.textContent = translations[state.lang].skip_section;
+                        elementToUpdate.removeAttribute('data-skipped');
+                    } else if (elementToUpdate.classList.contains('skip-subcategory-btn')) {
+                        elementToUpdate.textContent = translations[state.lang].skip_subsection;
+                        elementToUpdate.removeAttribute('data-skipped');
+                    }
+                }
+                updateProgress();
+            };
+
+            const handleSkip = (idsToSkip, elementToUpdate, isQuestion) => {
+                const isAlreadySkipped = isQuestion ? state.answers[idsToSkip[0]] === 'skipped' : elementToUpdate.getAttribute('data-skipped') === 'true';
+
+                if (isAlreadySkipped) {
+                    unskipItems(idsToSkip, elementToUpdate);
+                    return;
+                }
+
                 idsToSkip.forEach(id => {
                     state.answers[id] = 'skipped';
                     const questionBlock = document.querySelector(`.question-block[data-question-id="${id}"]`);
-                    if(questionBlock) {
+                    if (questionBlock) {
                         questionBlock.classList.add('skipped-question');
                         questionBlock.classList.remove('unanswered-question');
                         questionBlock.querySelectorAll('input[type="radio"]').forEach(radio => {
@@ -468,13 +497,13 @@
                         const skipBtn = questionBlock.querySelector('.skip-question-btn');
                         if (skipBtn) {
                             skipBtn.textContent = translations[state.lang].skipped;
-                            skipBtn.disabled = true;
                         }
                     }
                 });
-                if(elementToUpdate && !elementToUpdate.classList.contains('skip-question-btn')) {
+
+                if (!isQuestion && elementToUpdate) {
                     elementToUpdate.textContent = translations[state.lang].skipped;
-                    elementToUpdate.disabled = true;
+                    elementToUpdate.setAttribute('data-skipped', 'true');
                 }
                 updateProgress();
             };
@@ -544,16 +573,32 @@
                     });
                 });
 
-                document.querySelectorAll('.skip-category-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); const category = e.target.dataset.category; const idsToSkip = assessmentData.filter(q => q.category === category).map(q => q.id); handleSkip(idsToSkip, e.target); }));
-                document.querySelectorAll('.skip-subcategory-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); const subcategory = e.target.dataset.subcategory; const idsToSkip = assessmentData.filter(q => q.subcategory === subcategory).map(q => q.id); handleSkip(idsToSkip, e.target); }));
-                document.querySelectorAll('.skip-question-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); const qId = e.target.dataset.questionId; handleSkip([qId], e.target); }));
+                document.querySelectorAll('.skip-category-btn').forEach(btn => btn.addEventListener('click', (e) => { 
+                    e.stopPropagation(); 
+                    const category = e.target.dataset.category; 
+                    const idsToSkip = assessmentData.filter(q => q.category === category).map(q => q.id); 
+                    handleSkip(idsToSkip, e.target, false); 
+                }));
+                document.querySelectorAll('.skip-subcategory-btn').forEach(btn => btn.addEventListener('click', (e) => { 
+                    e.stopPropagation(); 
+                    const subcategory = e.target.dataset.subcategory; 
+                    const idsToSkip = assessmentData.filter(q => q.subcategory === subcategory).map(q => q.id); 
+                    handleSkip(idsToSkip, e.target, false); 
+                }));
+                document.querySelectorAll('.skip-question-btn').forEach(btn => btn.addEventListener('click', (e) => { 
+                    e.stopPropagation(); 
+                    const qId = e.target.dataset.questionId; 
+                    handleSkip([qId], e.target, true); 
+                }));
                 document.querySelectorAll('input[type="radio"]').forEach(radio => {
                     radio.addEventListener('change', (e) => {
                         state.answers[e.target.dataset.questionId] = parseInt(e.target.value);
                         const questionBlock = document.querySelector(`.question-block[data-question-id="${e.target.dataset.questionId}"]`);
                         questionBlock.classList.remove('unanswered-question', 'skipped-question');
                         const skipBtn = questionBlock.querySelector('.skip-question-btn');
-                        if(skipBtn) skipBtn.disabled = false;
+                        if(skipBtn) {
+                           skipBtn.textContent = translations[state.lang].skip_question;
+                        }
                         updateProgress();
                     });
                 });
@@ -662,13 +707,141 @@
             };
             const hideMilestoneModal = () => document.getElementById('milestone-modal').classList.remove('visible');
             
-            async function generateAndDownloadPdf() { /* Function is complete and correct */ };
+            async function generateAndDownloadPdf() {
+                const doc = new jsPDF();
+                const lang = state.lang;
+                const today = new Date().toLocaleDateString(lang);
+                const pageHeight = doc.internal.pageSize.height;
+                const pageWidth = doc.internal.pageSize.width;
+                let yPos = 20;
+
+                const addHeaderFooter = (pageNumber, totalPages) => {
+                    doc.setFontSize(10);
+                    doc.setTextColor(150);
+                    doc.text('Business Check-up Report', 15, 10);
+                    doc.text(`${translations[lang].pdf_company}: ${state.companyInfo.name}`, pageWidth - 15, 10, { align: 'right' });
+                    doc.line(15, 12, pageWidth - 15, 12);
+                    doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - 15, pageHeight - 10, { align: 'right' });
+                };
+
+                doc.setFontSize(22);
+                doc.setTextColor(40);
+                doc.text(translations[lang].pdf_main_title, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 8;
+                doc.setFontSize(12);
+                doc.text(`${translations[lang].pdf_date}: ${today}`, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 15;
+                doc.setFontSize(16);
+                doc.text(translations[lang].pdf_summary_title, 15, yPos);
+                yPos += 10;
+                
+                const radarChartImg = charts.qcd.toBase64Image();
+                const criticalityChartImg = charts.criticality.toBase64Image();
+                
+                doc.addImage(radarChartImg, 'PNG', 15, yPos, 85, 85);
+                doc.addImage(criticalityChartImg, 'PNG', 110, yPos, 85, 85);
+
+                doc.addPage();
+                yPos = 20;
+                doc.setFontSize(16);
+                doc.text(translations[lang].pdf_details_title, 15, yPos);
+                
+                const resultsForPdf = assessmentData.map(q => {
+                    const robustness = state.answers[q.id];
+                    const criticality = robustness === 'skipped' ? 0 : q.impact * (6 - (robustness || 0));
+                    return { ...q, robustness: robustness === 'skipped' ? 'N/A' : (robustness || 0), criticality };
+                }).sort((a,b) => b.criticality - a.criticality);
+
+                const head = [[
+                    translations[lang].table_header_process,
+                    translations[lang].table_header_area,
+                    translations[lang].table_header_robustness,
+                    translations[lang].table_header_criticality
+                ]];
+                const body = resultsForPdf.map(r => [r.process[lang], r.category, r.robustness, r.criticality.toFixed(1)]);
+
+                doc.autoTable({
+                    head: head,
+                    body: body,
+                    startY: yPos + 10,
+                    headStyles: { fillColor: [59, 130, 246] },
+                });
+                
+                doc.addPage();
+                yPos = 20;
+                doc.setFontSize(16);
+                doc.text(translations[lang].pdf_improvements_title, 15, yPos);
+                yPos += 15;
+
+                doc.setFontSize(14);
+                doc.text(translations[lang].pdf_projects_title, 15, yPos);
+                yPos += 10;
+
+                const improvementProjects = assessmentData
+                    .filter(r => typeof state.answers[r.id] === 'number' && state.answers[r.id] <= 3 && r.suggestion)
+                    .sort((a,b) => (b.impact * (6 - (state.answers[b.id] || 0))) - (a.impact * (6 - (state.answers[a.id] || 0))));
+
+                improvementProjects.forEach(p => {
+                    if (yPos > pageHeight - 50) { 
+                        doc.addPage();
+                        yPos = 20;
+                    }
+
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.setTextColor(59, 130, 246);
+                    doc.text(p.suggestion.title[lang], 15, yPos);
+                    yPos += 6;
+
+                    doc.setFontSize(10);
+                    doc.setFont(undefined, 'normal');
+                    doc.setTextColor(40);
+                    const splitDesc = doc.splitTextToSize(p.suggestion.description[lang], pageWidth - 30);
+                    doc.text(splitDesc, 15, yPos);
+                    yPos += splitDesc.length * 4 + 4;
+
+                    doc.setFont(undefined, 'bold');
+                    doc.text(translations[lang].pdf_milestone, 20, yPos);
+                    yPos += 5;
+                    
+                    doc.setFont(undefined, 'normal');
+                    p.suggestion.milestones.forEach(m => {
+                        const milestoneText = `${m.name[lang]} (${m.timeline[lang]})`;
+                        const splitMilestone = doc.splitTextToSize(milestoneText, pageWidth - 45);
+                        doc.text(`•`, 20, yPos);
+                        doc.text(splitMilestone, 25, yPos);
+                        yPos += splitMilestone.length * 4 + 2;
+                    });
+                    yPos += 8;
+                });
+
+                const benefitEffortChartImg = charts.benefitEffort.toBase64Image();
+                if (yPos > pageHeight - 110) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                doc.addImage(benefitEffortChartImg, 'PNG', (pageWidth / 2) - 50, yPos, 100, 100);
+
+                const totalPages = doc.internal.getNumberOfPages();
+                for (let i = 1; i <= totalPages; i++) {
+                    doc.setPage(i);
+                    addHeaderFooter(i, totalPages);
+                }
+
+                doc.save(`Report_Check-up_${state.companyInfo.name.replace(/ /g,"_")}_${today}.pdf`);
+            }
 
             const switchLang = (lang) => {
                 if (state.lang === lang) return;
                 state.lang = lang;
                 document.documentElement.lang = lang;
                 translatePage();
+
+                if (state.currentStep === 3) {
+                    calculateResults();
+                } else if (state.currentStep === 4) {
+                    generateImprovements();
+                }
             };
 
             const populateSectors = (lang) => {
@@ -693,7 +866,7 @@
                 const lang = state.lang;
                 document.querySelectorAll('[data-translate-key]').forEach(el => {
                     const key = el.dataset.translateKey;
-                    if (translations[lang][key]) {
+                    if (translations[lang] && translations[lang][key]) {
                         el.innerHTML = translations[lang][key];
                     }
                 });
@@ -710,8 +883,7 @@
                     if (value === 'skipped') {
                         const questionBlock = document.querySelector(`.question-block[data-question-id="${qId}"]`);
                         if(questionBlock) {
-                            const btn = questionBlock.querySelector('.skip-question-btn');
-                            if(btn) handleSkip([qId], btn);
+                            handleSkip([qId], questionBlock.querySelector('.skip-question-btn'), true);
                         }
                     } else if (typeof value === 'number') {
                         const radio = document.querySelector(`input[name="${qId}"][value="${value}"]`);
@@ -806,5 +978,7 @@
         });
     </script>
 </body>
+
 </html>
+
 
